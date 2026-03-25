@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build
+backend/storage/*.key
+backend/bootstrap/cache/*
+shopify-app/build/
+shopify-app/.shopify/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+backend/storage/logs/*.log
+
+# SQLite
+*.sqlite
+*.sqlite-journal
+shopify-app/shopify_app_sessions.sqlite
+
+# Nested repos / tooling
+shopify-app/.git/
