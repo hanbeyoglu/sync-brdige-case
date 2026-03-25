@@ -35,3 +35,4 @@ shopify-app/shopify_app_sessions.sqlite
 
 # Nested repos / tooling
 shopify-app/.git/
+shopify-app/shopify.app.toml.bak

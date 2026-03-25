@@ -1,0 +1,24 @@
+client_id = "79283ef913700ce71bdd779e6644dad2"
+name = "SyncBridge App"
+application_url = "https://president-hoping-only-powerful.trycloudflare.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2026-04"
+
+[[webhooks.subscriptions]]
+topics = ["orders/create"]
+uri = "/webhooks/orders/create"
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,write_inventory,read_orders,read_customers,write_customers,write_metaobject_definitions,write_metaobjects"
+
+[auth]
+redirect_urls = [
+  "https://president-hoping-only-powerful.trycloudflare.com/auth/callback",
+  "https://president-hoping-only-powerful.trycloudflare.com/auth/shopify/callback",
+  "https://president-hoping-only-powerful.trycloudflare.com/api/auth"
+]
