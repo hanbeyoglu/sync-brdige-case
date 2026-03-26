@@ -30,6 +30,42 @@
                     class="w-full px-4 py-2 border rounded @error('base_price') border-red-500 @enderror">
                 @error('base_price')<p class="text-red-500 text-sm">{{ $message }}</p>@enderror
             </div>
+
+            <div class="pt-2">
+                @php($tierTags = ['wholesale', 'retail', 'vip'])
+                <h2 class="text-lg font-semibold mb-3">B2B Fiyat Katmanları</h2>
+                <div class="space-y-3">
+                    @foreach($tierTags as $tag)
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                            <div>
+                                <label class="block text-gray-700 mb-1">{{ ucfirst($tag) }} </label>
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-1">Fiyat ($)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    name="price_tiers[{{ $tag }}][price]"
+                                    value="{{ old("price_tiers.$tag.price") }}"
+                                    class="w-full px-4 py-2 border rounded @error("price_tiers.$tag.price") border-red-500 @enderror"
+                                >
+                                @error("price_tiers.$tag.price")<p class="text-red-500 text-sm">{{ $message }}</p>@enderror
+                            </div>
+                            <div>
+                                <label class="block text-gray-700 mb-1">Min. Adet</label>
+                                <input
+                                    type="number"
+                                    name="price_tiers[{{ $tag }}][min_quantity]"
+                                    value="{{ old("price_tiers.$tag.min_quantity") }}"
+                                    class="w-full px-4 py-2 border rounded @error("price_tiers.$tag.min_quantity") border-red-500 @enderror"
+                                >
+                                @error("price_tiers.$tag.min_quantity")<p class="text-red-500 text-sm">{{ $message }}</p>@enderror
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
             <div>
                 <label class="block text-gray-700 mb-1">Başlangıç Stok</label>
                 <input type="number" name="quantity" value="{{ old('quantity', 0) }}" min="0"
