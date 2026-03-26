@@ -1,0 +1,55 @@
+{
+  "payload": {
+    "export": "cart-transform-run",
+    "target": "cart.transform.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": {
+          "customer": {
+            "tierTags": [
+              { "tag": "wholesale", "hasTag": true },
+              { "tag": "retail", "hasTag": false },
+              { "tag": "vip", "hasTag": false }
+            ]
+          }
+        },
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/1",
+            "quantity": 2,
+            "cost": {
+              "amountPerQuantity": {
+                "amount": "100.00",
+                "currencyCode": "USD"
+              }
+            },
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/99",
+              "b2bPriceTiers": {
+                "type": "json",
+                "value": "{\"wholesale\":75,\"retail\":90,\"vip\":65}"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "lineUpdate": {
+            "cartLineId": "gid://shopify/CartLine/1",
+            "price": {
+              "adjustment": {
+                "fixedPricePerUnit": {
+                  "amount": "75.00"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+query CartTransformRunInput {
+  cart {
+    buyerIdentity {
+      customer {
+        tierTags: hasTags(tags: ["wholesale", "retail", "vip"]) {
+          tag
+          hasTag
+        }
+      }
+    }
+    lines {
+      id
+      quantity
+      cost {
+        amountPerQuantity {
+          amount
+          currencyCode
+        }
+      }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          id
+          b2bPriceTiers: metafield(namespace: "syncbridge", key: "b2b_price_tiers") {
+            type
+            value
+          }
+        }
+      }
+    }
+  }
+}
