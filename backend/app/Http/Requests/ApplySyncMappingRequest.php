@@ -17,7 +17,7 @@ class ApplySyncMappingRequest extends FormRequest
      * Body root-level array olarak geldiğinde ($request->all() boş olabilir)
      * JSON content'i doğrudan kullan
      */
-    protected function validationData(): array
+    public function validationData(): array
     {
         $data = $this->all();
         if (empty($data) && str_contains((string) $this->header('Content-Type'), 'application/json')) {
