@@ -21,9 +21,19 @@ query CartTransformRunInput {
         __typename
         ... on ProductVariant {
           id
-          b2bPriceTiers: metafield(namespace: "syncbridge", key: "b2b_price_tiers") {
-            type
-            value
+          product {
+            retail: metafield(namespace: "custom", key: "retail") {
+              type
+              value
+            }
+            vip: metafield(namespace: "custom", key: "vip") {
+              type
+              value
+            }
+            wholesale: metafield(namespace: "custom", key: "wholesale") {
+              type
+              value
+            }
           }
         }
       }

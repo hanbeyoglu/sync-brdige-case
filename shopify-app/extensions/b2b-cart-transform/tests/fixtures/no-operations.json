@@ -20,7 +20,11 @@
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/1",
-              "b2bPriceTiers": null
+              "product": {
+                "retail": null,
+                "vip": null,
+                "wholesale": null
+              }
             }
           }
         ]

@@ -124,81 +124,102 @@ mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
 }
 `;
 
+/** Admin'de tanımlı custom.retail / custom.vip / custom.wholesale (number_decimal) ile uyumlu */
+const CUSTOM_TIER_NAMESPACE = "custom";
+
 /**
- * Laravel price_tiers'ı B2B metafield JSON'a çevir
- * Örn: { wholesale: 75, retail: 90, vip: 65 } (base_price'a göre yüzde)
+ * Laravel price_tiers → Shopify MetafieldsSetInput[] (ürün sahibi, number_decimal string)
+ * base_price şartı yok; doğrudan mutlak fiyat yazılır.
  */
-function priceTiersToB2bJson(priceTiers, basePrice) {
+function priceTiersToCustomDecimalMetafields(priceTiers, productGid) {
   if (
     !priceTiers ||
     !Array.isArray(priceTiers) ||
     priceTiers.length === 0 ||
-    !basePrice ||
-    basePrice <= 0
+    !productGid
   ) {
-    return null;
+    return [];
   }
-  const obj = {};
+  const out = [];
   for (const tier of priceTiers) {
-    const tag = (tier.customer_tag || "").toLowerCase();
-    if (!tag) continue;
-    const pct = Math.round(((tier.price || 0) / basePrice) * 100);
-    obj[tag] = Math.min(100, Math.max(0, pct));
+    const key = String(tier.customer_tag || "")
+      .trim()
+      .toLowerCase();
+    if (!key) continue;
+    const raw = tier.price;
+    const num = typeof raw === "number" ? raw : Number.parseFloat(String(raw));
+    if (!Number.isFinite(num) || num < 0) continue;
+    const value = num.toFixed(2);
+    out.push({
+      ownerId: productGid,
+      namespace: CUSTOM_TIER_NAMESPACE,
+      key,
+      type: "number_decimal",
+      value,
+    });
   }
-  return Object.keys(obj).length > 0 ? obj : null;
+  return out;
 }
 
 /**
- * B2B price tiers metafield sync - variant'a syncbridge.b2b_price_tiers yaz
+ * B2B tier fiyatları → ürün üzerinde custom.{tag} number_decimal metafield
+ * (Shopify Admin'deki tanımlarla aynı namespace/key)
  */
 async function runB2bMetafieldSync(admin, products, mappingItems, errors) {
   const skuToProduct = Object.fromEntries(products.map((p) => [p.sku, p]));
   /** @type {{ sku: string, fields: object }[]} */
-  const entries = [];
+  const flat = [];
 
   for (const m of mappingItems) {
-    if (!m.shopify_variant_id) continue;
+    if (!m.shopify_product_id) continue;
     const product = skuToProduct[m.sku];
-    if (!product || !product.price_tiers) continue;
-    const b2bJson = priceTiersToB2bJson(
+    if (!product?.price_tiers?.length) continue;
+    const fields = priceTiersToCustomDecimalMetafields(
       product.price_tiers,
-      product.base_price,
+      m.shopify_product_id,
     );
-    if (!b2bJson) continue;
-    entries.push({
-      sku: m.sku,
-      fields: {
-        namespace: "syncbridge",
-        key: "b2b_price_tiers",
-        ownerId: m.shopify_variant_id,
-        type: "json",
-        value: JSON.stringify(b2bJson),
-      },
-    });
+    for (const fieldsItem of fields) {
+      flat.push({ sku: m.sku, fields: fieldsItem });
+    }
   }
 
-  if (entries.length === 0)
+  if (flat.length === 0) {
     return { metafieldsProcessed: 0, metafieldsFailed: 0 };
+  }
 
+  /** Shopify metafieldsSet başına ~25 input limiti */
   const batchSize = 25;
   let processed = 0;
   let failed = 0;
 
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const slice = entries.slice(i, i + batchSize);
+  for (let i = 0; i < flat.length; i += batchSize) {
+    const slice = flat.slice(i, i + batchSize);
     const batch = slice.map((e) => e.fields);
     try {
       const res = await admin.graphql(METAFIELDS_SET_MUTATION, {
         variables: { metafields: batch },
       });
       const json = await res.json();
+
+      if (json.errors?.length) {
+        console.error(
+          "[SyncBridge] metafieldsSet GraphQL errors:",
+          JSON.stringify(json.errors),
+        );
+      }
+
       const errs = json.data?.metafieldsSet?.userErrors || [];
       if (errs.length > 0) {
+        console.error(
+          "[SyncBridge] metafieldsSet userErrors:",
+          JSON.stringify(errs),
+        );
         failed += slice.length;
         const msg = errs.map((e) => e.message).join(", ");
-        for (const e of slice) {
+        const skus = [...new Set(slice.map((e) => e.sku))];
+        for (const sku of skus) {
           errors.push({
-            sku: e.sku,
+            sku,
             step: "metafield",
             status: "error",
             error: msg,
@@ -212,9 +233,11 @@ async function runB2bMetafieldSync(admin, products, mappingItems, errors) {
     } catch (e) {
       failed += slice.length;
       const msg = e?.message || e || "metafieldsSet hatası";
-      for (const ent of slice) {
+      console.error("[SyncBridge] metafieldsSet exception:", msg);
+      const skus = [...new Set(slice.map((ent) => ent.sku))];
+      for (const sku of skus) {
         errors.push({
-          sku: ent.sku,
+          sku,
           step: "metafield",
           status: "error",
           error: msg,

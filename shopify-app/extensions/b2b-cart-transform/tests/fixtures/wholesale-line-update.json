@@ -26,9 +26,10 @@
             "merchandise": {
               "__typename": "ProductVariant",
               "id": "gid://shopify/ProductVariant/99",
-              "b2bPriceTiers": {
-                "type": "json",
-                "value": "{\"wholesale\":75,\"retail\":90,\"vip\":65}"
+              "product": {
+                "retail": { "type": "number_decimal", "value": "90.00" },
+                "vip": { "type": "number_decimal", "value": "65.00" },
+                "wholesale": { "type": "number_decimal", "value": "313.02" }
               }
             }
           }
@@ -43,7 +44,7 @@
             "price": {
               "adjustment": {
                 "fixedPricePerUnit": {
-                  "amount": "75.00"
+                  "amount": "313.02"
                 }
               }
             }

@@ -42,13 +42,9 @@ function resolveChosenTierTag(
   return null;
 }
 
-/**
- * Safe JSON parse for metafield `value` (JSON type stored as string).
- * Keys are normalized (trim + lowercase); values coerced to finite numbers.
- */
-function parseTierPercentMap(
+function parseDecimalMetafield(
   value: string | null | undefined,
-): Record<string, number> | null {
+): number | null {
   if (value == null) {
     return null;
   }
@@ -56,28 +52,30 @@ function parseTierPercentMap(
   if (trimmed.length === 0) {
     return null;
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch {
+  const num = Number(trimmed);
+  return Number.isFinite(num) && num >= 0 ? num : null;
+}
+
+type TierProductMetafields = {
+  retail?: { value?: string | null } | null;
+  vip?: { value?: string | null } | null;
+  wholesale?: { value?: string | null } | null;
+};
+
+function tierUnitPriceFromProductMetafields(
+  product: TierProductMetafields | null | undefined,
+  chosen: (typeof TAG_PRIORITY)[number],
+): number | null {
+  if (!product) {
     return null;
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-    const nk = normalizeTag(k);
-    if (!nk) {
-      continue;
-    }
-    const num = typeof v === "number" ? v : Number(v);
-    if (!Number.isFinite(num)) {
-      continue;
-    }
-    out[nk] = num;
-  }
-  return Object.keys(out).length > 0 ? out : null;
+  const mf =
+    chosen === "retail"
+      ? product.retail
+      : chosen === "vip"
+        ? product.vip
+        : product.wholesale;
+  return parseDecimalMetafield(mf?.value ?? null);
 }
 
 function formatDecimalAmount(n: number): string {
@@ -99,30 +97,8 @@ export function cartTransformRun(
     if (!m || m.__typename !== "ProductVariant") {
       continue;
     }
-    const raw = m.b2bPriceTiers?.value;
-    if (raw == null || String(raw).trim() === "") {
-      continue;
-    }
-    const map = parseTierPercentMap(raw);
-    if (!map) {
-      continue;
-    }
-    const pct = map[chosen];
-    if (pct == null || !Number.isFinite(pct) || pct <= 0 || pct > 100) {
-      continue;
-    }
-
-    const baseStr = line.cost?.amountPerQuantity?.amount;
-    if (baseStr == null) {
-      continue;
-    }
-    const base = Number(baseStr);
-    if (!Number.isFinite(base) || base < 0) {
-      continue;
-    }
-
-    const newUnit = (base * pct) / 100;
-    if (!Number.isFinite(newUnit) || newUnit < 0) {
+    const newUnit = tierUnitPriceFromProductMetafields(m.product, chosen);
+    if (newUnit == null) {
       continue;
     }
 

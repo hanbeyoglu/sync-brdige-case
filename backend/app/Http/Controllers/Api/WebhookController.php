@@ -222,6 +222,7 @@ class WebhookController extends Controller
      */
     public function applyMapping(ApplySyncMappingRequest $request): JsonResponse
     {
+        $started = microtime(true);
         $mappings = $request->validated();
         $updated = 0;
 
@@ -283,7 +284,12 @@ class WebhookController extends Controller
             $updated++;
         }
 
-        Log::info('Sync mapping applied', ['items' => count($mappings), 'updated' => $updated]);
+        Log::info('Sync mapping applied', [
+            'items' => count($mappings),
+            'updated' => $updated,
+            'duration_ms' => round((microtime(true) - $started) * 1000, 2),
+            'note' => 'Yalnızca Laravel ürün/envanter eşlemesi; tier metafield yazımı shopify-app bulkSync (Admin GraphQL metafieldsSet) içindedir.',
+        ]);
 
         return response()->json([
             'success' => true,
@@ -332,14 +338,32 @@ class WebhookController extends Controller
             return response()->json(['error' => 'Log bulunamadı'], 404);
         }
 
+        $metadata = $request->has('metadata') ? $request->input('metadata') : null;
+
         $log->update(array_filter([
             'status' => $request->input('status', SyncLog::STATUS_COMPLETED),
             'message' => $request->input('message'),
             'items_processed' => $request->input('items_processed', 0),
             'items_failed' => $request->input('items_failed', 0),
-            'metadata' => $request->has('metadata') ? $request->input('metadata') : null,
+            'metadata' => $metadata,
             'completed_at' => now(),
         ], fn ($v) => $v !== null));
+
+        if (is_array($metadata)) {
+            $mfFailed = (int) ($metadata['metafields']['failed'] ?? 0);
+            $errors = $metadata['errors'] ?? [];
+            $metafieldErrors = array_values(array_filter(
+                is_array($errors) ? $errors : [],
+                fn ($e) => is_array($e) && ($e['step'] ?? '') === 'metafield'
+            ));
+            if ($mfFailed > 0 || $metafieldErrors !== []) {
+                Log::warning('SyncBridge Shopify metafieldsSet (App → log metadata)', [
+                    'sync_log_id' => $id,
+                    'metafields_failed' => $mfFailed,
+                    'metafield_errors' => $metafieldErrors,
+                ]);
+            }
+        }
 
         return response()->json(['success' => true]);
     }
