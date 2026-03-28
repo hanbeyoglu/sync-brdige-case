@@ -1,0 +1,34 @@
+query RunInput {
+  cart {
+    buyerIdentity {
+      customer {
+        metafield(namespace: "custom", key: "tier") {
+          value
+        }
+      }
+    }
+    lines {
+      id
+      cost {
+        amountPerQuantity {
+          amount
+        }
+      }
+      merchandise {
+        ... on ProductVariant {
+          product {
+            vip: metafield(namespace: "custom", key: "vip") {
+              value
+            }
+            wholesale: metafield(namespace: "custom", key: "wholesale") {
+              value
+            }
+            retail: metafield(namespace: "custom", key: "retail") {
+              value
+            }
+          }
+        }
+      }
+    }
+  }
+}

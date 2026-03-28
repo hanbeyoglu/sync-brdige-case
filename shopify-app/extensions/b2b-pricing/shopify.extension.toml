@@ -1,0 +1,17 @@
+api_version = "2026-01"
+
+[[extensions]]
+name = "t:name"
+handle = "b2b-pricing"
+type = "function"
+uid = "091e0132-a578-b108-d25f-28c728d5c2b193b7b351"
+description = "t:description"
+
+  [[extensions.targeting]]
+  target = "cart.lines.discounts.generate.run"
+  input_query = "src/cart_lines_discounts_generate_run.graphql"
+  export = "cart-lines-discounts-generate-run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
