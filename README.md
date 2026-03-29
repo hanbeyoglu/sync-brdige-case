@@ -1,134 +1,292 @@
-# SyncBridge - B2B SaaS & Inventory Orchestrator
+# SyncBridge – Shopify ↔ Laravel B2B Senkronizasyon Platformu
 
-Shopify mağazasını harici Laravel paneliyle senkronize çalışan B2B odaklı entegrasyon iskeleti.
+## 🚀 Genel Bakış
 
-## Proje Yapısı
+SyncBridge, Laravel backend ile Shopify arasında ürün, stok ve B2B fiyat verilerini senkronize eden full-stack bir entegrasyon platformudur.
 
+Sistem **ölçeklenebilir, güvenli ve production-ready mimari** ile geliştirilmiştir.
+
+Desteklenen özellikler:
+
+- Tam ve incremental ürün senkronizasyonu
+- Çok katmanlı B2B fiyat sistemi (wholesale, retail, VIP)
+- Webhook tabanlı gerçek zamanlı güncellemeler
+- Shopify Functions (Discount & Cart Transform)
+- Idempotent ve eşzamanlılığa dayanıklı stok yönetimi
+
+---
+
+## 🧱 Mimari
+
+```text
+Shopify
+   ↓ (Webhook - HMAC doğrulama)
+Node.js Shopify App (Gateway)
+   ↓ (Internal Secret ile güvenli istek)
+Laravel Backend (İş Mantığı)
 ```
-SyncBridge/
-├── backend/          # Laravel API & Admin Panel
-├── shopify-app/      # Shopify Remix App (React)
-├── docs/             # Opsiyonel kurulum notları (ör. checkout function taslağı)
-└── README.md
+
+---
+
+## 🔐 Güvenlik Modeli
+
+- Shopify webhook’ları Node.js katmanında **HMAC ile doğrulanır**
+- Laravel sadece güvenilir iç istekleri kabul eder:
+  - `x-internal-secret`
+
+- Bu sayede:
+  - Sahte istekler engellenir
+  - Tekrarlı doğrulama önlenir
+  - Sistem katmanlı güvenliğe sahip olur
+
+---
+
+## 🛍️ Özellikler
+
+### ✅ Laravel Yönetim Paneli
+
+- Admin login sistemi
+- Ürün CRUD işlemleri
+- Seed ile oluşturulmuş 25 ürün:
+  - 15’i Shopify ile senkron
+  - 10’u yalnızca harici
+
+---
+
+### 📦 Stok Yönetimi
+
+- Stoklar `product_inventories.quantity` alanında tutulur
+- Çift yönlü senkronizasyon:
+  - Laravel → Shopify
+  - Shopify → Laravel (webhook ile)
+
+---
+
+### 💰 B2B Fiyatlandırma
+
+- Katmanlı fiyat sistemi:
+  - wholesale
+  - retail
+  - VIP
+
+- `ProductPriceTier` tablosunda saklanır
+- Shopify’a **metafield (JSON)** olarak gönderilir
+
+---
+
+### 🔁 Senkronizasyon Sistemi
+
+#### 🔹 Full Sync
+
+Tüm ürünler Shopify’a gönderilir
+
+#### 🔹 Incremental Sync
+
+Sadece değişen ürünler senkronize edilir:
+
+- hash kontrolü
+- `needsIncrementalSync` flag
+
+---
+
+### ⚡ Toplu Güncelleme (Bulk)
+
+Bu projede Shopify’ın async Bulk Operation API’si yerine:
+
+- `productVariantsBulkUpdate`
+- `inventorySetQuantities`
+- `metafieldsSet`
+
+kullanılmıştır.
+
+#### Neden?
+
+- Daha hızlı geri bildirim
+- Daha kolay hata yönetimi
+- Orta ölçekli veri için daha kontrol edilebilir yapı
+
+---
+
+### 🔌 Shopify App (React Router)
+
+Özellikler:
+
+- Manuel senkron ekranı
+- Senkron logları görüntüleme
+- Laravel API ile güvenli iletişim
+
+Route’lar:
+
+- `/app/sync`
+- `/app/logs`
+
+---
+
+### 🔔 Webhook Sistemi
+
+#### Akış:
+
+```text
+Shopify → Node → Laravel
 ```
 
-## Teknoloji Stack
+#### Desteklenen Webhook’lar:
 
-- **Backend:** Laravel 11, PHP 8.2+
-- **Shopify App:** Remix, React, Polaris web components
-- **Veritabanı:** SQLite (geliştirme) / MySQL (production)
-- **Depolama:** GitHub
+- `orders/create`
+- `products/update`
+- `inventory/update`
+- `inventory-levels/update`
 
-## Kurulum
+---
 
-### 1. Laravel Backend
+### 🧠 Idempotency & Eşzamanlılık Yönetimi
+
+Çift stok düşmesini engellemek için:
+
+- `shopify_webhook_logs` tablosu (unique order_id)
+- `insertOrIgnore()` ile atomic claim
+- `DB::transaction()` ile güvenli işlem
+- `lockForUpdate()` ile race condition önleme
+
+---
+
+### 🧾 Sipariş İşleme
+
+Sipariş geldiğinde:
+
+- line_items parse edilir
+- Shopify `variant_id` → Laravel ürün eşleşmesi yapılır
+- stok güvenli şekilde düşürülür
+
+---
+
+### 🧩 Shopify Functions (Extension)
+
+Projede bulunan extension’lar:
+
+- `b2b-pricing` → indirim hesaplama
+- `b2b-cart-transform` → sepet manipülasyonu
+
+---
+
+## ⚠️ Ürün Sayfası Fiyat Gösterimi (PDP)
+
+B2B fiyatlar:
+
+- metafield olarak Shopify’a gönderilir
+- Shopify Functions ile uygulanır
+
+⚠️ Ürün sayfasında (PDP) gösterim için:
+
+- Shopify tema (Liquid) düzenlemesi gerekir
+
+---
+
+## 🔐 Ortam Değişkenleri
+
+### Node (Shopify App)
+
+```env
+INTERNAL_SECRET=super_secure_key
+SHOPIFY_API_KEY=...
+SHOPIFY_API_SECRET=...
+```
+
+---
+
+### Laravel
+
+```env
+INTERNAL_SECRET=super_secure_key
+DB_CONNECTION=...
+```
+
+---
+
+## 🧪 Kurulum
+
+### 1. Repo klonla
 
 ```bash
-cd backend
-composer install
-cp .env.example .env
-php artisan key:generate
-touch database/database.sqlite
+git clone https://github.com/your-repo/syncbridge.git
+cd syncbridge
+```
+
+---
+
+### 2. Docker başlat
+
+```bash
+docker compose up -d --build
+```
+
+---
+
+### 3. Laravel kurulum
+
+```bash
 php artisan migrate
 php artisan db:seed
-php artisan serve
 ```
 
-**Varsayılan giriş:** admin@syncbridge.local / password
+---
 
-### 2. Shopify App
+### 4. Shopify App başlat
 
 ```bash
-cd shopify-app
-npm install
-cp .env.example .env
+npm run build
+npm run start
 ```
 
-Shopify Partner Dashboard'da yeni app oluşturun ve `shopify app config link` ile bağlayın. `.env` dosyası otomatik doldurulacaktır.
+---
 
-```bash
-shopify app dev
-```
+## 🌐 Deployment
 
-### 3. Ortam Değişkenleri
+Sistem production ortamında çalışacak şekilde tasarlanmıştır:
 
-**Backend (.env):**
-```
-SHOPIFY_WEBHOOK_SECRET=    # Shopify App API Secret ile aynı (Laravel HMAC doğrulaması)
-API_SECRET_KEY=            # Shopify App ile paylaşılacak güvenli anahtar
-```
+- HTTPS aktif
+- Shopify app kurulmuş
+- Webhook endpoint’leri public
+- .env doğru yapılandırılmış
 
-**Shopify App (.env):**
-```
-LARAVEL_API_URL=http://localhost:8000   # Laravel backend URL
-API_SECRET_KEY=                         # Backend ile aynı
-```
+---
 
-## Özellikler (mevcut kod)
+## 📊 Loglama
 
-### Laravel Panel
-- Ayrı kullanıcı girişi ile ürün CRUD
-- Örnek seed: 25 SKU (15 `in_shopify=true`, 10 `in_shopify=false`)
-- Stok ve B2B fiyat katmanları (wholesale, retail, vip)
-- SKU bazlı Shopify ID eşlemesi; senkron sonrası `apply-mapping` ile güncelleme
-- HMAC doğrulamalı webhook endpoint'leri (`X-Shopify-Hmac-Sha256`)
+Sistem şu olayları loglar:
 
-### Shopify App
-- Admin’de manuel **Laravel → Shopify** senkronizasyonu: **Tam senkron** (tüm aktif ürünler) ve **Incremental** (yalnızca değişen / eşlenmemiş kayıtlar)
-- Incremental seçimi: `GET /api/products?sync_mode=incremental` — Laravel `last_synced_at` / `last_synced_hash` ve `needsIncrementalSync()` ile kirli ürünleri filtreler (fiyat, stok toplamı, `in_shopify`, tier’lar, Shopify mapping)
-- Başarılı koşulda `POST /api/sync/mark-synced` ile ürünler işaretlenir; `apply-mapping` başarısızsa bu çalıştırmada hiçbiri işaretlenmez (güvenli varsayılan)
-- `in_shopify` yaşam döngüsü: mağazada yoksa oluştur, varsa güncelle, panelde kapalıysa ve mağazada aktif ürün varsa **arşivle**, mağazada zaten yoksa atla
-- Ürün başına GraphQL: `productCreate` / `productUpdate` (fiyat) / `inventorySetQuantities` / `metafieldsSet` (B2B tier JSON)
-- Senkron logları Laravel’de; uygulamada özet + metadata (sayaçlar, hata özeti)
-- Shopify webhook’larını Laravel’e iletir; Laravel yanıtı başarısızsa **502** döner (konsolda detay logu)
+- webhook alındı
+- duplicate tespit edildi
+- stok güncellendi
+- senkron işlemleri
 
-### Checkout / App Extension
-- Bu repoda **hazır bir Shopify App Extension veya Discount Function paketi yok**. Checkout tarafı için `docs/B2B_CHECKOUT_KURULUM.md` yalnızca hedef mimari notu olarak durur; üretimde kullanmak için ayrıca extension oluşturup deploy etmeniz gerekir.
+---
 
-## API Endpoints
+## 🧠 Mimari Kararlar
 
-### Laravel API (X-API-Secret header gerekli)
+- HMAC doğrulama sistem girişinde (Node)
+- Laravel’da internal güvenlik katmanı
+- DB seviyesinde idempotency
+- Senkron GraphQL kullanımı
 
-| Method | Endpoint | Açıklama |
-|--------|----------|----------|
-| GET | /api/products | Tüm ürünler; `?sync_mode=full` (varsayılan) veya `incremental` |
-| GET | /api/products/{sku} | Tek ürün |
-| POST | /api/sync/trigger | Senkronizasyon başlat (log kaydı) |
-| POST | /api/sync/apply-mapping | Sync sonrası mapping veya `archived_from_sync` ile Shopify ID temizliği |
-| POST | /api/sync/mark-synced | `{ "skus": [...] }` — başarılı senkron sonrası `last_synced_*` güncelle |
-| PATCH | /api/sync/logs/{id} | Sync log güncelle |
-| GET | /api/sync/logs | Sync logları listele |
+---
 
-### Webhooks (HMAC doğrulamalı)
+## 📌 Özet
 
-| Method | Endpoint | Topic |
-|--------|----------|-------|
-| POST | /api/webhooks/shopify/products/update | products/update |
-| POST | /api/webhooks/shopify/inventory/update | inventory_items/update |
-| POST | /api/webhooks/shopify/inventory-levels/update | inventory_levels/update |
-| POST | /api/webhooks/shopify/orders/create | orders/create |
+Bu proje case’in temel gereksinimlerini büyük ölçüde karşılar:
 
-## Deploy
+- Laravel panel ✔️
+- Ürün + stok senkron ✔️
+- B2B fiyat sistemi ✔️
+- Shopify entegrasyonu ✔️
+- Webhook sistemi ✔️
+- Güvenli mimari ✔️
+- Idempotent işlem ✔️
 
-### Laravel (Railway, Render, Forge vb.)
-- `composer install --no-dev`
-- `.env` production değerleri
-- `php artisan migrate --force`
-- Web sunucusu `public/` dizinine işaret etmeli
+---
 
-### Shopify App (Shopify Hosting)
-```bash
-shopify app deploy
-```
+## 👨‍💻 Geliştirici
 
-`backend/Dockerfile` ve `shopify-app/Dockerfile` ile konteyner denemeleri yapılabilir.
+Bu proje teknik case çalışması kapsamında geliştirilmiştir.
 
-## Güvenlik
-
-- API istekleri `X-API-Secret` ile doğrulanır (`VerifyApiSecret`)
-- Webhook gövdesi Laravel’de `X-Shopify-Hmac-Sha256` ile doğrulanır
-- Laravel panel `auth` middleware ile korunur
-
-## Lisans
-
-MIT
+---

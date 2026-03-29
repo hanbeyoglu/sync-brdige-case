@@ -21,8 +21,8 @@ Route::middleware(['api', \App\Http\Middleware\VerifyApiSecret::class])->group(f
     Route::get('/sync/logs', [ProductApiController::class, 'syncLogs']);
 });
 
-// Webhook rotaları - HMAC ile doğrulanır (CSRF hariç)
-Route::prefix('webhooks/shopify')->middleware(\App\Http\Middleware\VerifyShopifyWebhook::class)->group(function () {
+// Webhook rotaları — HMAC Shopify app (Node) katmanında; burada x-internal-secret ile güvenilir
+Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/products/update', [WebhookController::class, 'productsUpdate']);
     Route::post('/inventory/update', [WebhookController::class, 'inventoryUpdate']);
     Route::post('/inventory-levels/update', [WebhookController::class, 'inventoryLevelsUpdate']);

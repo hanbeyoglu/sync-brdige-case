@@ -7,42 +7,53 @@ use App\Http\Requests\ApplySyncMappingRequest;
 use App\Http\Requests\MarkProductsSyncedRequest;
 use App\Models\Product;
 use App\Models\ProductInventory;
+use App\Models\ShopifyWebhookLog;
 use App\Models\SyncLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
 {
-    private function debugLog(string $runId, string $hypothesisId, string $location, string $message, array $data = []): void
+    /**
+     * Node (Shopify app) tarafından iletilen webhook'lar için paylaşılan gizli anahtar doğrulaması.
+     */
+    private function rejectUnlessTrustedInternalWebhook(Request $request): ?JsonResponse
     {
-        try {
-            file_put_contents(
-                '/Users/hanbeyoglu/Desktop/Apps/SyncBridge/.cursor/debug.log',
-                json_encode([
-                    'id' => uniqid('log_', true),
-                    'timestamp' => (int) round(microtime(true) * 1000),
-                    'runId' => $runId,
-                    'hypothesisId' => $hypothesisId,
-                    'location' => $location,
-                    'message' => $message,
-                    'data' => $data,
-                ], JSON_UNESCAPED_SLASHES) . PHP_EOL,
-                FILE_APPEND
-            );
-        } catch (\Throwable $e) {
-            // no-op
-        }
-    }
+        $expected = config('shopify.internal_secret');
+        if (! is_string($expected) || $expected === '') {
+            Log::error('SyncBridge webhook: INTERNAL_SECRET yapılandırılmamış');
 
+            return response()->json(['error' => 'Server misconfiguration'], 500);
+        }
+
+        $provided = $request->header('x-internal-secret');
+        if (! is_string($provided) || ! hash_equals($expected, $provided)) {
+            Log::warning('SyncBridge webhook: geçersiz veya eksik x-internal-secret', [
+                'path' => $request->path(),
+            ]);
+
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        return null;
+    }
 
     /**
      * Ürün güncelleme webhook - Shopify'dan Laravel'e
      */
     public function productsUpdate(Request $request): JsonResponse
     {
+        if ($unauthorized = $this->rejectUnlessTrustedInternalWebhook($request)) {
+            return $unauthorized;
+        }
+
         $payload = $request->all();
-        Log::info('Shopify products/update webhook', ['payload' => $payload]);
+        Log::info('SyncBridge webhook products/update işleniyor', [
+            'product_id' => $payload['id'] ?? null,
+            'payload_keys' => array_keys($payload),
+        ]);
 
         // Variant SKU ve inventory güncellemelerini işle
         if (isset($payload['variants'])) {
@@ -67,8 +78,14 @@ class WebhookController extends Controller
      */
     public function inventoryUpdate(Request $request): JsonResponse
     {
+        if ($unauthorized = $this->rejectUnlessTrustedInternalWebhook($request)) {
+            return $unauthorized;
+        }
+
         $payload = $request->all();
-        Log::info('Shopify inventory_items/update webhook', ['payload' => $payload]);
+        Log::info('SyncBridge webhook inventory_items/update işleniyor', [
+            'inventory_item_id' => $payload['admin_graphql_api_id'] ?? $payload['id'] ?? null,
+        ]);
 
         // Inventory item ID ile eşleşen kaydı güncelle
         $inventoryItemId = $payload['admin_graphql_api_id'] ?? $payload['id'] ?? null;
@@ -88,8 +105,16 @@ class WebhookController extends Controller
      */
     public function inventoryLevelsUpdate(Request $request): JsonResponse
     {
+        if ($unauthorized = $this->rejectUnlessTrustedInternalWebhook($request)) {
+            return $unauthorized;
+        }
+
         $payload = $request->all();
-        Log::info('Shopify inventory_levels/update webhook', ['payload' => $payload]);
+        Log::info('SyncBridge webhook inventory_levels/update işleniyor', [
+            'inventory_item_id' => $payload['inventory_item_id'] ?? null,
+            'location_id' => $payload['location_id'] ?? null,
+            'available' => $payload['available'] ?? null,
+        ]);
 
         $inventoryItemId = $this->normalizeShopifyGid($payload['inventory_item_id'] ?? null, 'InventoryItem');
         $locationId = $this->normalizeShopifyGid($payload['location_id'] ?? null, 'Location');
@@ -126,65 +151,262 @@ class WebhookController extends Controller
     }
 
     /**
-     * Sipariş oluşturma webhook - stok düşümü
+     * Sipariş satırlarından variant GID başına toplam düşülecek miktarları üretir (aynı variant tekrarları birleşir).
+     *
+     * @return array<string, int> shopify_variant_id (GID) => quantity
+     */
+    private function aggregateOrderDeductionsByVariantGid(array $lineItems, mixed $orderId): array
+    {
+        $deductions = [];
+
+        foreach ($lineItems as $index => $item) {
+            $variantRaw = $item['variant_id'] ?? null;
+            $variantGid = $this->normalizeShopifyGid($variantRaw, 'ProductVariant');
+            $quantity = (int) ($item['quantity'] ?? 0);
+
+            Log::info('SyncBridge orders/create satır inceleniyor', [
+                'order_id' => $orderId,
+                'line_index' => $index,
+                'variant_id_raw' => $variantRaw,
+                'shopify_variant_id' => $variantGid,
+                'quantity' => $quantity,
+            ]);
+
+            if ($quantity <= 0) {
+                Log::notice('SyncBridge orders/create satır atlandı (geçersiz miktar)', [
+                    'order_id' => $orderId,
+                    'line_index' => $index,
+                    'quantity' => $quantity,
+                ]);
+
+                continue;
+            }
+
+            if (! $variantGid) {
+                Log::notice('SyncBridge orders/create satır atlandı (variant_id yok veya çözülemedi)', [
+                    'order_id' => $orderId,
+                    'line_index' => $index,
+                    'variant_id_raw' => $variantRaw,
+                ]);
+
+                continue;
+            }
+
+            $deductions[$variantGid] = ($deductions[$variantGid] ?? 0) + $quantity;
+        }
+
+        return $deductions;
+    }
+
+    /**
+     * Sipariş oluşturma webhook — shopify_variant_id eşlemesi ile ProductInventory üzerinden stok düşümü.
+     *
+     * Idempotency: shopify_order_id üzerinde benzersiz kayıt + insertOrIgnore ile aynı transaction içinde
+     * atomik "claim" (yarış koşullarında çift stok düşümünü engeller). Claim, stok işleminden önce yapılır;
+     * işlem başarısız olursa rollback ile claim de geri alınır.
+     *
+     * Not: Stok `product_inventories.quantity` alanında tutulur.
      */
     public function ordersCreate(Request $request): JsonResponse
     {
-        $payload = $request->all();
-        // #region agent log
-        $this->debugLog('initial', 'H4', 'WebhookController.php:135', 'ordersCreate entered', [
-            'orderId' => $payload['id'] ?? null,
-            'lineItemsCount' => isset($payload['line_items']) && is_array($payload['line_items']) ? count($payload['line_items']) : 0,
-            'financialStatus' => $payload['financial_status'] ?? null,
-            'sourceName' => $payload['source_name'] ?? null,
-            'createdVia' => $payload['created_via'] ?? null,
-        ]);
-        // #endregion
-        Log::info('Shopify orders/create webhook', ['order_id' => $payload['id'] ?? null]);
-
-        if (isset($payload['line_items'])) {
-            foreach ($payload['line_items'] as $item) {
-                $sku = $item['sku'] ?? null;
-                $qty = (int) ($item['quantity'] ?? 0);
-                if ($sku && $qty > 0) {
-                    $product = Product::where('sku', $sku)->first();
-                    if ($product) {
-                        $inv = $product->inventory()->first();
-                        if ($inv) {
-                            $inv->decrement('quantity', $qty);
-                            // #region agent log
-                            $this->debugLog('initial', 'H5', 'WebhookController.php:153', 'inventory decremented', [
-                                'sku' => $sku,
-                                'qty' => $qty,
-                                'inventoryId' => $inv->id,
-                            ]);
-                            // #endregion
-                        } else {
-                            // #region agent log
-                            $this->debugLog('initial', 'H5', 'WebhookController.php:161', 'inventory row missing for sku', [
-                                'sku' => $sku,
-                            ]);
-                            // #endregion
-                        }
-                    } else {
-                        // #region agent log
-                        $this->debugLog('initial', 'H5', 'WebhookController.php:168', 'product not found by sku', [
-                            'sku' => $sku,
-                        ]);
-                        // #endregion
-                    }
-                } else {
-                    // #region agent log
-                    $this->debugLog('initial', 'H4', 'WebhookController.php:175', 'line item skipped due to missing sku/qty', [
-                        'hasSku' => !empty($sku),
-                        'qty' => $qty,
-                    ]);
-                    // #endregion
-                }
-            }
+        if ($unauthorized = $this->rejectUnlessTrustedInternalWebhook($request)) {
+            return $unauthorized;
         }
 
-        return response()->json(['received' => true]);
+        $payload = $request->all();
+        $orderId = $payload['id'] ?? null;
+        $lineItems = $payload['line_items'] ?? [];
+
+        Log::info('SyncBridge orders/create webhook alındı', [
+            'order_id' => $orderId,
+            'line_items_count' => is_array($lineItems) ? count($lineItems) : 0,
+            'financial_status' => $payload['financial_status'] ?? null,
+            'source_name' => $payload['source_name'] ?? null,
+        ]);
+
+        if ($orderId === null || $orderId === '') {
+            Log::notice('SyncBridge orders/create order id eksik, idempotency uygulanmadı');
+
+            return response()->json([
+                'received' => true,
+                'order_id' => null,
+                'deductions_applied' => 0,
+                'success' => false,
+                'error' => 'missing_order_id',
+            ], 200);
+        }
+
+        $orderIdStr = (string) $orderId;
+
+        if (ShopifyWebhookLog::query()->where('shopify_order_id', $orderIdStr)->exists()) {
+            Log::info('SyncBridge orders/create duplicate webhook yok sayıldı', [
+                'order_id' => $orderIdStr,
+            ]);
+
+            return response()->json([
+                'received' => true,
+                'success' => true,
+                'duplicate' => true,
+                'order_id' => $orderIdStr,
+            ]);
+        }
+
+        if (! is_array($lineItems) || $lineItems === []) {
+            return response()->json([
+                'received' => true,
+                'order_id' => $orderIdStr,
+                'deductions_applied' => 0,
+            ]);
+        }
+
+        try {
+            $deductionsByVariantGid = $this->aggregateOrderDeductionsByVariantGid($lineItems, $orderId);
+
+            if ($deductionsByVariantGid === []) {
+                Log::notice('SyncBridge orders/create geçerli satır yok (stok düşümü yapılmadı)', [
+                    'order_id' => $orderIdStr,
+                ]);
+
+                return response()->json([
+                    'received' => true,
+                    'order_id' => $orderIdStr,
+                    'deductions_applied' => 0,
+                ]);
+            }
+
+            $variantGids = array_keys($deductionsByVariantGid);
+            $productsByVariantGid = Product::query()
+                ->whereIn('shopify_variant_id', $variantGids)
+                ->get()
+                ->keyBy('shopify_variant_id');
+
+            $rows = [];
+            foreach ($deductionsByVariantGid as $gid => $qty) {
+                $product = $productsByVariantGid->get($gid);
+                if (! $product) {
+                    Log::warning('SyncBridge orders/create ürün bulunamadı (shopify_variant_id)', [
+                        'order_id' => $orderIdStr,
+                        'shopify_variant_id' => $gid,
+                        'quantity_requested' => $qty,
+                    ]);
+
+                    continue;
+                }
+                $rows[] = ['product' => $product, 'quantity' => $qty];
+            }
+
+            usort($rows, fn (array $a, array $b): int => $a['product']->id <=> $b['product']->id);
+
+            $deductionGroupCount = count($deductionsByVariantGid);
+            $applied = 0;
+
+            $response = DB::transaction(function () use ($rows, $orderIdStr, &$applied, $deductionGroupCount) {
+                $now = now();
+                $claimed = ShopifyWebhookLog::query()->insertOrIgnore([
+                    'topic' => 'orders/create',
+                    'shopify_order_id' => $orderIdStr,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                if ($claimed === 0) {
+                    Log::info('SyncBridge orders/create duplicate webhook yok sayıldı (transaction içi)', [
+                        'order_id' => $orderIdStr,
+                    ]);
+
+                    return response()->json([
+                        'received' => true,
+                        'success' => true,
+                        'duplicate' => true,
+                        'order_id' => $orderIdStr,
+                    ]);
+                }
+
+                foreach ($rows as $row) {
+                    /** @var Product $product */
+                    $product = $row['product'];
+                    $quantity = $row['quantity'];
+
+                    Log::info('SyncBridge orders/create stok düşümü başlıyor', [
+                        'order_id' => $orderIdStr,
+                        'product_id' => $product->id,
+                        'shopify_variant_id' => $product->shopify_variant_id,
+                        'quantity' => $quantity,
+                    ]);
+
+                    $inv = ProductInventory::query()
+                        ->where('product_id', $product->id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $inv) {
+                        Log::notice('SyncBridge orders/create envanter kaydı yok', [
+                            'order_id' => $orderIdStr,
+                            'product_id' => $product->id,
+                            'shopify_variant_id' => $product->shopify_variant_id,
+                        ]);
+
+                        continue;
+                    }
+
+                    $onHand = (int) $inv->quantity;
+                    if ($onHand < $quantity) {
+                        Log::warning('SyncBridge orders/create yetersiz stok', [
+                            'order_id' => $orderIdStr,
+                            'product_id' => $product->id,
+                            'shopify_variant_id' => $product->shopify_variant_id,
+                            'inventory_id' => $inv->id,
+                            'quantity_on_hand' => $onHand,
+                            'quantity_requested' => $quantity,
+                        ]);
+
+                        continue;
+                    }
+
+                    $inv->decrement('quantity', $quantity);
+                    $inv->refresh();
+
+                    $applied++;
+
+                    Log::info('SyncBridge orders/create stok güncellendi', [
+                        'order_id' => $orderIdStr,
+                        'product_id' => $product->id,
+                        'shopify_variant_id' => $product->shopify_variant_id,
+                        'inventory_id' => $inv->id,
+                        'quantity_deducted' => $quantity,
+                        'quantity_remaining' => (int) $inv->quantity,
+                    ]);
+                }
+
+                Log::info('SyncBridge orders/create webhook başarıyla işlendi', [
+                    'order_id' => $orderIdStr,
+                    'deduction_groups' => $deductionGroupCount,
+                    'deductions_applied' => $applied,
+                ]);
+
+                return response()->json([
+                    'received' => true,
+                    'order_id' => $orderIdStr,
+                    'deductions_applied' => $applied,
+                    'success' => true,
+                ]);
+            });
+
+            return $response;
+        } catch (\Throwable $e) {
+            Log::error('SyncBridge orders/create beklenmeyen hata', [
+                'order_id' => $orderIdStr,
+                'message' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+
+            return response()->json([
+                'received' => true,
+                'order_id' => $orderIdStr,
+                'success' => false,
+                'error' => 'internal_error',
+            ], 200);
+        }
     }
 
     /**

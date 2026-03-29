@@ -1,7 +1,6 @@
-import { json } from "@remix-run/node";
 import { authenticate } from "../shopify.server";
 
-export const loader = async ({ request }) => {
+export async function loader({ request }) {
   const { admin } = await authenticate.admin(request);
 
   const response = await admin.graphql(`
@@ -24,6 +23,5 @@ export const loader = async ({ request }) => {
     }
   `);
 
-  const data = await response.json();
-  return json(data);
-};
+  return Response.json(await response.json());
+}
