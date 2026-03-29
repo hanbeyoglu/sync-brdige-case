@@ -46,59 +46,6 @@ export default function Index() {
           </div>
         </s-section>
 
-        {/* Actions */}
-        <s-section heading="Hızlı İşlemler">
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              gap: "16px",
-            }}
-          >
-            {/* Sync Card */}
-            <a href="/app/sync" style={{ textDecoration: "none" }}>
-              <div
-                style={{
-                  padding: "18px",
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  transition: "0.2s ease",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontWeight: 600, marginBottom: "6px" }}>
-                  Manual Sync
-                </div>
-                <div style={{ fontSize: "13px", opacity: 0.7 }}>
-                  Laravel → Shopify veri senkronizasyonunu başlat
-                </div>
-              </div>
-            </a>
-
-            {/* Logs Card */}
-            <a href="/app/logs" style={{ textDecoration: "none" }}>
-              <div
-                style={{
-                  padding: "18px",
-                  borderRadius: "14px",
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  transition: "0.2s ease",
-                  cursor: "pointer",
-                }}
-              >
-                <div style={{ fontWeight: 600, marginBottom: "6px" }}>
-                  Sync Logs
-                </div>
-                <div style={{ fontSize: "13px", opacity: 0.7 }}>
-                  Senkron geçmişini ve hata kayıtlarını görüntüle
-                </div>
-              </div>
-            </a>
-          </div>
-        </s-section>
-
         {/* Status */}
         <s-section heading="Sistem Durumu">
           <div
