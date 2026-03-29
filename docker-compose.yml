@@ -13,6 +13,7 @@ services:
       - APP_DEBUG=true
       - DB_CONNECTION=sqlite
       - DB_DATABASE=/var/www/html/database/database.sqlite
+      - INTERNAL_SECRET=54e34dbdc6e374cc8bc74da00faab8fd020ee804e050cecd437ed90e25f05d5e
     command: php artisan serve --host=0.0.0.0 --port=8000
   shopify-app:
     build:
@@ -26,3 +27,4 @@ services:
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
+      - INTERNAL_SECRET=54e34dbdc6e374cc8bc74da00faab8fd020ee804e050cecd437ed90e25f05d5e
