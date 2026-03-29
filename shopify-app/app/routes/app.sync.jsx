@@ -19,14 +19,14 @@ export const action = async ({ request }) => {
   const syncType =
     syncMode === "incremental" ? "manual_incremental" : "manual";
 
-  const laravelUrl = process.env.LARAVEL_API_URL || "http://localhost:8000";
-  const apiSecret = process.env.API_SECRET_KEY || "";
+  const laravelUrl = process.env.LARAVEL_API_URL || "https://syncbridge-api.hanbeyoglu.com";
+  const internalSecret = process.env.INTERNAL_SECRET_KEY || "";
 
   const response = await fetch(`${laravelUrl}/api/sync/trigger`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-Secret": apiSecret,
+      "x-internal-secret": internalSecret,
     },
     body: JSON.stringify({
       shop_domain: session.shop,
@@ -46,7 +46,7 @@ export const action = async ({ request }) => {
   const syncResult = await runSyncToShopify(
     admin,
     laravelUrl,
-    apiSecret,
+    internalSecret,
     syncMode,
   );
 
@@ -57,7 +57,7 @@ export const action = async ({ request }) => {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Secret": apiSecret,
+        "x-internal-secret": internalSecret,
       },
       body: JSON.stringify({
         status: "completed",
@@ -108,10 +108,10 @@ export const action = async ({ request }) => {
   };
 };
 
-async function runSyncToShopify(admin, laravelUrl, apiSecret, syncMode = "full") {
+async function runSyncToShopify(admin, laravelUrl, internalSecret, syncMode = "full") {
   const products = await fetchProductsFromLaravel(
     laravelUrl,
-    apiSecret,
+    internalSecret,
     syncMode,
   );
 
@@ -168,7 +168,7 @@ async function runSyncToShopify(admin, laravelUrl, apiSecret, syncMode = "full")
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Secret": apiSecret,
+          "x-internal-secret": internalSecret,
         },
         body: JSON.stringify(mappingPayload),
       });
@@ -198,7 +198,7 @@ async function runSyncToShopify(admin, laravelUrl, apiSecret, syncMode = "full")
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Secret": apiSecret,
+          "x-internal-secret": internalSecret,
         },
         body: JSON.stringify({ skus: syncedSkus }),
       });
@@ -276,82 +276,263 @@ export default function SyncPage() {
   const isSyncing = fetcher.state !== "idle";
   return (
     <s-page heading="Manual Sync">
-      <s-section heading="Laravel → Shopify Sync">
-        <s-paragraph>
-          Laravel panelindeki ürün, stok ve fiyat verilerini Shopify mağazasına
-          aktarır.
-        </s-paragraph>
-        <s-paragraph>Store: {shop}</s-paragraph>
-
-        {fetcher.data?.success ? (
-          <s-banner
-            tone={
-              (fetcher.data.failed ?? 0) > 0 ||
-              (fetcher.data.errors?.length ?? 0) > 0
-                ? "warning"
-                : "success"
-            }
-          >
-            <s-paragraph>{fetcher.data.message}</s-paragraph>
-            {fetcher.data.created != null ? (
-              <s-paragraph style={{ marginTop: 8 }}>
-                Özet: oluşturuldu {fetcher.data.created} · güncellendi{" "}
-                {fetcher.data.updated} · atlandı {fetcher.data.skipped} ·
-                arşivlendi {fetcher.data.archived} · hata {fetcher.data.failed}
-              </s-paragraph>
-            ) : null}
-          </s-banner>
-        ) : null}
-
-        {fetcher.data?.error ? (
-          <s-banner tone="critical">{fetcher.data.error}</s-banner>
-        ) : null}
-
-        {fetcher.data?.errors && fetcher.data.errors.length > 0 ? (
-          <div style={{ marginTop: "16px" }}>
-            <s-banner tone="critical">
-              <s-paragraph>
-                {fetcher.data.errors.length} adet hata oluştu:
-              </s-paragraph>
-
-              {fetcher.data.errors.map((error, index) => (
-                <s-paragraph key={index}>
-                  <strong>{error.sku}</strong> [{error.step}] - {error.message}
-                </s-paragraph>
-              ))}
-            </s-banner>
-          </div>
-        ) : null}
-
-        <fetcher.Form method="post">
+      <div
+        style={{
+          maxWidth: "900px",
+          margin: "0 auto",
+          padding: "8px 0 24px 0",
+        }}
+      >
+        <s-section heading="Laravel → Shopify Sync">
           <div
             style={{
-              marginTop: "16px",
               display: "flex",
-              flexWrap: "wrap",
-              gap: "8px",
+              flexDirection: "column",
+              gap: "16px",
+              padding: "8px 4px",
             }}
           >
-            <s-button
-              type="submit"
-              name="sync_mode"
-              value="full"
-              {...(isSyncing ? { loading: true } : {})}
+            <div
+              style={{
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "14px",
+                background: "#ffffff",
+              }}
             >
-              {isSyncing ? "Senkronize ediliyor..." : "Tam senkron (tüm ürünler)"}
-            </s-button>
-            <s-button
-              type="submit"
-              name="sync_mode"
-              value="incremental"
-              variant="secondary"
-              {...(isSyncing ? { loading: true } : {})}
+              <s-paragraph>
+                Laravel panelindeki ürün, stok ve fiyat verilerini Shopify mağazasına aktarır.
+              </s-paragraph>
+              <div style={{ marginTop: "10px", opacity: 0.8 }}>
+                <s-paragraph>Store: {shop}</s-paragraph>
+              </div>
+            </div>
+  
+            {fetcher.data?.success ? (
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "14px",
+                  border:
+                    (fetcher.data.failed ?? 0) > 0 ||
+                    (fetcher.data.errors?.length ?? 0) > 0
+                      ? "1px solid #f59e0b"
+                      : "1px solid #22c55e",
+                  background:
+                    (fetcher.data.failed ?? 0) > 0 ||
+                    (fetcher.data.errors?.length ?? 0) > 0
+                      ? "#fff7ed"
+                      : "#f0fdf4",
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "8px" }}>
+                  Senkronizasyon Sonucu
+                </div>
+  
+                <s-paragraph>{fetcher.data.message}</s-paragraph>
+  
+                {fetcher.data.created != null ? (
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                      gap: "10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", opacity: 0.7 }}>Oluşturuldu</div>
+                      <div style={{ fontWeight: 700, fontSize: "18px" }}>
+                        {fetcher.data.created}
+                      </div>
+                    </div>
+  
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", opacity: 0.7 }}>Güncellendi</div>
+                      <div style={{ fontWeight: 700, fontSize: "18px" }}>
+                        {fetcher.data.updated}
+                      </div>
+                    </div>
+  
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", opacity: 0.7 }}>Atlandı</div>
+                      <div style={{ fontWeight: 700, fontSize: "18px" }}>
+                        {fetcher.data.skipped}
+                      </div>
+                    </div>
+  
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", opacity: 0.7 }}>Arşivlendi</div>
+                      <div style={{ fontWeight: 700, fontSize: "18px" }}>
+                        {fetcher.data.archived}
+                      </div>
+                    </div>
+  
+                    <div
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "#fff",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <div style={{ fontSize: "12px", opacity: 0.7 }}>Hata</div>
+                      <div style={{ fontWeight: 700, fontSize: "18px" }}>
+                        {fetcher.data.failed}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+  
+            {fetcher.data?.error ? (
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "14px",
+                  border: "1px solid #ef4444",
+                  background: "#fef2f2",
+                  color: "#991b1b",
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "6px" }}>Hata</div>
+                <div>{fetcher.data.error}</div>
+              </div>
+            ) : null}
+  
+            {fetcher.data?.errors && fetcher.data.errors.length > 0 ? (
+              <div
+                style={{
+                  padding: "16px",
+                  borderRadius: "14px",
+                  border: "1px solid #ef4444",
+                  background: "#fff",
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: "10px" }}>
+                  Hata Detayları ({fetcher.data.errors.length})
+                </div>
+  
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                  }}
+                >
+                  {fetcher.data.errors.map((error, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: "#f9fafb",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <strong>{error.sku}</strong> [{error.step}] - {error.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+  
+            <div
+              style={{
+                padding: "16px",
+                border: "1px solid #e5e7eb",
+                borderRadius: "14px",
+                background: "#ffffff",
+              }}
             >
-              Incremental (değişenler)
-            </s-button>
+              <div style={{ fontWeight: 600, marginBottom: "12px" }}>
+                Senkronizasyon İşlemleri
+              </div>
+  
+              <fetcher.Form method="post">
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "12px",
+                  }}
+                >
+                  <button
+                    type="submit"
+                    name="sync_mode"
+                    value="full"
+                    disabled={isSyncing}
+                    style={{
+                      border: "none",
+                      borderRadius: "12px",
+                      padding: "12px 18px",
+                      fontWeight: 600,
+                      cursor: isSyncing ? "not-allowed" : "pointer",
+                      background: isSyncing ? "#cbd5e1" : "#111827",
+                      color: "#fff",
+                      minWidth: "220px",
+                      transition: "0.2s ease",
+                    }}
+                  >
+                    {isSyncing ? "Senkronize ediliyor..." : "Tam senkron (tüm ürünler)"}
+                  </button>
+  
+                  <button
+                    type="submit"
+                    name="sync_mode"
+                    value="incremental"
+                    disabled={isSyncing}
+                    style={{
+                      border: "1px solid #d1d5db",
+                      borderRadius: "12px",
+                      padding: "12px 18px",
+                      fontWeight: 600,
+                      cursor: isSyncing ? "not-allowed" : "pointer",
+                      background: isSyncing ? "#f3f4f6" : "#ffffff",
+                      color: "#111827",
+                      minWidth: "220px",
+                      transition: "0.2s ease",
+                    }}
+                  >
+                    Incremental (değişenler)
+                  </button>
+                </div>
+              </fetcher.Form>
+            </div>
           </div>
-        </fetcher.Form>
-      </s-section>
+        </s-section>
+      </div>
     </s-page>
   );
 }

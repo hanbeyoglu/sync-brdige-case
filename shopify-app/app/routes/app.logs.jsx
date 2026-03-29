@@ -185,223 +185,211 @@ export default function LogsPage() {
   return (
     <s-page heading="Sync Logs">
       <s-section heading="Son Senkronizasyon İşlemleri">
-        {anyLogHasErrors ? (
+  
+        {anyLogHasErrors && (
           <s-banner tone="warning">
             <s-paragraph>
-              Bazı senkronlarda ürün bazlı hatalar kaydedildi. Detayları görmek
-              için ilgili satırda &quot;Detay&quot; seçin.
+              Bazı senkronlarda ürün bazlı hatalar var. Detay için satırdan “Detay” seç.
             </s-paragraph>
           </s-banner>
-        ) : null}
-        <div
-          style={{
-            marginTop: anyLogHasErrors ? 16 : 0,
-          }}
-        >
+        )}
+  
+        <div style={{ marginTop: 16 }}>
           <PolarisAppProvider i18n={tr}>
             <BlockStack gap="400">
-            {list.length === 0 ? (
-              <s-paragraph>Henüz log kaydı yok.</s-paragraph>
-            ) : (
-              <BlockStack gap="400">
-                <div style={{ overflowX: "auto" }}>
-                  <DataTable
-                    columnContentTypes={COLUMN_TYPES}
-                    headings={TABLE_HEADINGS}
-                    rows={rows}
-                  />
-                </div>
-                <InlineStack gap="300" blockAlign="center" wrap>
-                  <Button
-                    size="slim"
-                    disabled={page <= 1}
-                    onClick={() => setCurrentPage(page - 1)}
-                  >
-                    Önceki
-                  </Button>
-                  <Text as="span" variant="bodySm" tone="subdued">
-                    Sayfa {page} / {totalPages}
-                  </Text>
-                  <Button
-                    size="slim"
-                    disabled={page >= totalPages}
-                    onClick={() => setCurrentPage(page + 1)}
-                  >
-                    Sonraki
-                  </Button>
-                </InlineStack>
-                <Text as="p" tone="subdued" variant="bodySm">
-                  * İşlenen: sunucunun toplu işlenen kayıt sayısı (legacy
-                  alan); sayaçlar için metadata.counts kullanılır.
-                </Text>
-
-                {selectedLog ? (
+  
+              {/* 🔹 ÖZET KARTLAR */}
+              <InlineStack gap="300" wrap>
+                <Card>
+                  <BlockStack gap="100">
+                    <Text variant="bodySm" tone="subdued">Toplam log</Text>
+                    <Text variant="headingMd">{list.length}</Text>
+                  </BlockStack>
+                </Card>
+  
+                <Card>
+                  <BlockStack gap="100">
+                    <Text variant="bodySm" tone="subdued">Hatalı</Text>
+                    <Text variant="headingMd">
+                      {list.filter((l) => logHasErrors(l)).length}
+                    </Text>
+                  </BlockStack>
+                </Card>
+  
+                <Card>
+                  <BlockStack gap="100">
+                    <Text variant="bodySm" tone="subdued">Son kayıt</Text>
+                    <Text variant="bodyMd">
+                      {list.length > 0 ? formatDateTime(list[0]?.started_at) : "—"}
+                    </Text>
+                  </BlockStack>
+                </Card>
+              </InlineStack>
+  
+              {/* 🔹 TABLO */}
+              {list.length === 0 ? (
+                <Card>
+                  <Text>Henüz log kaydı yok.</Text>
+                </Card>
+              ) : (
+                <>
                   <Card>
                     <BlockStack gap="300">
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 12,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <Text as="h3" variant="headingMd">
-                          Log #{selectedLog.id}
-                        </Text>
-                        <Button
-                          size="slim"
-                          tone="critical"
-                          variant="plain"
-                          onClick={() => setSelectedId(null)}
-                        >
-                          Kapat
-                        </Button>
+                      <Text variant="headingMd">Senkronizasyon Geçmişi</Text>
+  
+                      <div style={{ overflowX: "auto" }}>
+                        <DataTable
+                          columnContentTypes={COLUMN_TYPES}
+                          headings={TABLE_HEADINGS}
+                          rows={rows}
+                        />
                       </div>
-
-                      <BlockStack gap="100">
-                        <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          Mesaj
-                        </Text>
-                        <Text as="p" variant="bodyMd">
-                          {selectedLog.message?.trim()
-                            ? selectedLog.message
-                            : "—"}
-                        </Text>
-                      </BlockStack>
-
-                      <BlockStack gap="100">
-                        <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          Zamanlar
-                        </Text>
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          Başlangıç:{" "}
-                          {formatDateTime(selectedLog.started_at)} · Bitiş:{" "}
-                          {formatDateTime(selectedLog.completed_at)}
-                        </Text>
-                      </BlockStack>
-
-                      {(detailMapOk !== null || detailMarked !== null) && (
-                        <BlockStack gap="100">
-                          <Text as="p" variant="bodyMd" fontWeight="semibold">
-                            Senkron ek bilgi
-                          </Text>
-                          <Text as="p" variant="bodySm" tone="subdued">
-                            {detailMapOk !== null
-                              ? `Mapping uygulandı: ${detailMapOk ? "evet" : "hayır"}`
-                              : null}
-                            {detailMapOk !== null && detailMarked !== null
-                              ? " · "
-                              : null}
-                            {detailMarked !== null
-                              ? `İşaretlenen ürün: ${detailMarked}`
-                              : null}
-                          </Text>
-                        </BlockStack>
-                      )}
-
-                      <BlockStack gap="100">
-                        <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          Stok özeti
-                        </Text>
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          {detailStocks
-                            ? `Güncellenen: ${formatCountCell(detailStocks.processed)} · Hata: ${formatCountCell(detailStocks.failed)}`
-                            : "—"}
-                        </Text>
-                      </BlockStack>
-
-                      <BlockStack gap="100">
-                        <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          Metafield (B2B) özeti
-                        </Text>
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          {detailMetafields
-                            ? `İşlenen: ${formatCountCell(detailMetafields.processed)} · Hata: ${formatCountCell(detailMetafields.failed)}`
-                            : "—"}
-                        </Text>
-                      </BlockStack>
-
-                      <BlockStack gap="200">
-                        <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          Hatalar ({detailErrorsList.length})
-                        </Text>
-                        {detailErrorsList.length === 0 ? (
-                          <Text as="p" variant="bodySm" tone="subdued">
-                            Bu kayıt için ürün hatası yok.
-                          </Text>
-                        ) : (
-                          <BlockStack gap="150">
-                            {detailErrorsList.map((err, i) => (
-                              <div key={i}>
-                                <Text as="p" variant="bodySm">
-                                  <Text as="span" fontWeight="semibold">
-                                    {err.sku ?? "?"}
-                                  </Text>
-                                  {err.step ? (
-                                    <Text as="span" tone="subdued">
-                                      {" "}
-                                      [{err.step}]{` `}
-                                    </Text>
-                                  ) : null}
-                                  <Text as="span">
-                                    {err.message || err.error || "Hata"}
-                                  </Text>
-                                </Text>
-                              </div>
-                            ))}
-                          </BlockStack>
-                        )}
-                      </BlockStack>
-
-                      <Button
-                        size="slim"
-                        onClick={() => setRawJsonOpen((o) => !o)}
-                      >
-                        {rawJsonOpen
-                          ? "Ham metadata gizle"
-                          : "Ham metadata göster"}
-                      </Button>
-
-                      <Collapsible
-                        open={rawJsonOpen}
-                        id={`raw-json-${String(selectedLog.id)}`}
-                        transition={{
-                          duration: "200ms",
-                          timingFunction: "ease-in-out",
-                        }}
-                      >
-                        <BlockStack gap="100">
-                          <Text as="p" variant="bodySm" tone="subdued">
-                            Ham metadata
-                          </Text>
-                          <pre
-                            style={{
-                              margin: 0,
-                              padding: 12,
-                              overflow: "auto",
-                              maxHeight: 280,
-                              fontSize: 12,
-                              background:
-                                "var(--p-color-bg-surface-secondary)",
-                              borderRadius: 8,
-                              whiteSpace: "pre-wrap",
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {selectedLog.metadata != null &&
-                            typeof selectedLog.metadata === "object"
-                              ? formatMetadataJson(selectedLog.metadata)
-                              : "Metadata yok."}
-                          </pre>
-                        </BlockStack>
-                      </Collapsible>
                     </BlockStack>
                   </Card>
-                ) : null}
-              </BlockStack>
-            )}
+  
+                  {/* 🔹 PAGINATION */}
+                  <Card>
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text tone="subdued">
+                        Sayfa {page} / {totalPages}
+                      </Text>
+  
+                      <InlineStack gap="200">
+                        <Button
+                          size="slim"
+                          disabled={page <= 1}
+                          onClick={() => setCurrentPage(page - 1)}
+                        >
+                          Önceki
+                        </Button>
+  
+                        <Button
+                          size="slim"
+                          disabled={page >= totalPages}
+                          onClick={() => setCurrentPage(page + 1)}
+                        >
+                          Sonraki
+                        </Button>
+                      </InlineStack>
+                    </InlineStack>
+                  </Card>
+  
+                  <Text tone="subdued" variant="bodySm">
+                    * İşlenen: legacy alan (metadata.counts kullanılır)
+                  </Text>
+  
+                  {/* 🔹 DETAY */}
+                  {selectedLog && (
+                    <Card>
+                      <BlockStack gap="300">
+  
+                        {/* HEADER */}
+                        <InlineStack align="space-between">
+                          <BlockStack gap="050">
+                            <Text variant="headingMd">
+                              Log #{selectedLog.id}
+                            </Text>
+                            <Text tone="subdued" variant="bodySm">
+                              {selectedLog.sync_type} · {selectedLog.status}
+                            </Text>
+                          </BlockStack>
+  
+                          <Button
+                            tone="critical"
+                            variant="plain"
+                            onClick={() => setSelectedId(null)}
+                          >
+                            Kapat
+                          </Button>
+                        </InlineStack>
+  
+                        {/* MESAJ */}
+                        <BlockStack gap="100">
+                          <Text fontWeight="semibold">Mesaj</Text>
+                          <Text>{selectedLog.message || "—"}</Text>
+                        </BlockStack>
+  
+                        {/* ZAMAN */}
+                        <Text tone="subdued">
+                          {formatDateTime(selectedLog.started_at)} →{" "}
+                          {formatDateTime(selectedLog.completed_at)}
+                        </Text>
+  
+                        {/* EXTRA INFO */}
+                        {(detailMapOk !== null || detailMarked !== null) && (
+                          <Text tone="subdued">
+                            {detailMapOk !== null &&
+                              `Mapping: ${detailMapOk ? "ok" : "fail"}`}
+                            {detailMarked !== null &&
+                              ` · İşaretlenen: ${detailMarked}`}
+                          </Text>
+                        )}
+  
+                        {/* STOCK */}
+                        <Text tone="subdued">
+                          Stok → {detailStocks?.processed ?? 0} ok /{" "}
+                          {detailStocks?.failed ?? 0} hata
+                        </Text>
+  
+                        {/* META */}
+                        <Text tone="subdued">
+                          Metafield → {detailMetafields?.processed ?? 0} ok /{" "}
+                          {detailMetafields?.failed ?? 0} hata
+                        </Text>
+  
+                        {/* 🔴 HATALAR */}
+                        <BlockStack gap="200">
+                          <Text fontWeight="semibold">
+                            Hatalar ({detailErrorsList.length})
+                          </Text>
+  
+                          {detailErrorsList.length === 0 ? (
+                            <Text tone="subdued">Hata yok</Text>
+                          ) : (
+                            <div
+                              style={{
+                                maxHeight: 220,
+                                overflow: "auto",
+                                padding: 12,
+                                border: "1px solid #eee",
+                                borderRadius: 12,
+                                background: "#fafafa",
+                              }}
+                            >
+                              {detailErrorsList.map((err, i) => (
+                                <div key={i} style={{ marginBottom: 8 }}>
+                                  <Text>
+                                    <b>{err.sku}</b> [{err.step}] —{" "}
+                                    {err.message}
+                                  </Text>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </BlockStack>
+  
+                        {/* RAW */}
+                        <Button onClick={() => setRawJsonOpen((o) => !o)}>
+                          {rawJsonOpen ? "Gizle" : "Ham veri"}
+                        </Button>
+  
+                        <Collapsible open={rawJsonOpen}>
+                          <pre
+                            style={{
+                              padding: 12,
+                              fontSize: 12,
+                              background: "#f6f6f6",
+                              borderRadius: 8,
+                            }}
+                          >
+                            {formatMetadataJson(selectedLog.metadata)}
+                          </pre>
+                        </Collapsible>
+                      </BlockStack>
+                    </Card>
+                  )}
+                </>
+              )}
             </BlockStack>
           </PolarisAppProvider>
         </div>
