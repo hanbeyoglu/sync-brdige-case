@@ -65,10 +65,11 @@ export async function getShopifyProductsBySku(admin) {
   const response = await admin.graphql(
     `#graphql
     query {
-      products(first: 250, query: "status:active") {
+      products(first: 250) {
         edges {
           node {
             id
+            status
             variants(first: 10) {
               edges {
                 node {
@@ -105,6 +106,7 @@ export async function getShopifyProductsBySku(admin) {
         const invLevel = invItem?.inventoryLevels?.edges?.[0]?.node;
         skuToVariant[v.node.sku] = {
           productId: node.id,
+          productStatus: node.status || null,
           variantId: v.node.id,
           inventoryItemId: invItem?.id || null,
           locationId: invLevel?.location?.id || null,
@@ -428,6 +430,46 @@ export async function runBulkSync(admin, products, skuMap) {
 
     let mapped = skuMap[p.sku];
     let wasCreatedNow = false;
+
+    // Daha önce arşiv/taslak durumda olan ürün tekrar senkrona dahil olduysa aktifleştir.
+    if (mapped?.productId && mapped?.productStatus !== "ACTIVE") {
+      try {
+        const reactivateRes = await admin.graphql(PRODUCT_ARCHIVE_MUTATION, {
+          variables: {
+            input: {
+              id: mapped.productId,
+              status: "ACTIVE",
+            },
+          },
+        });
+        const reactivateJson = await reactivateRes.json();
+        const reactivateErrs = reactivateJson.data?.productUpdate?.userErrors || [];
+        if (reactivateErrs.length > 0) {
+          errors.push({
+            sku: p.sku,
+            step: "reactivate",
+            status: "error",
+            error: reactivateErrs.map((e) => e.message).join(", "),
+            message: reactivateErrs.map((e) => e.message).join(", "),
+            timestamp: Date.now(),
+          });
+          failed++;
+          continue;
+        }
+        mapped.productStatus = "ACTIVE";
+      } catch (e) {
+        errors.push({
+          sku: p.sku,
+          step: "reactivate",
+          status: "error",
+          error: e?.message || e || "Bilinmeyen hata",
+          message: e?.message || e || "Bilinmeyen hata",
+          timestamp: Date.now(),
+        });
+        failed++;
+        continue;
+      }
+    }
 
     // Shopify'da yoksa oluştur
     if (!mapped) {
