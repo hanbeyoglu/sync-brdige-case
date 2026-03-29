@@ -21,17 +21,24 @@ class WebhookController extends Controller
      */
     private function rejectUnlessTrustedInternalWebhook(Request $request): ?JsonResponse
     {
-        $expected = config('shopify.internal_secret');
-        if (! is_string($expected) || $expected === '') {
-            Log::error('SyncBridge webhook: INTERNAL_SECRET yapılandırılmamış');
+        $header = trim((string) ($request->header('x-internal-secret') ?? ''));
+        $configRaw = config('shopify.internal_secret');
+        $config = is_string($configRaw) ? trim($configRaw) : '';
 
-            return response()->json(['error' => 'Server misconfiguration'], 500);
-        }
+        if ($header === '' || $config === '' || ! hash_equals($config, $header)) {
+            if (config('app.debug')) {
+                Log::info('SECRET DEBUG', [
+                    'path' => $request->path(),
+                    'header_len' => strlen($header),
+                    'config_len' => strlen($config),
+                    'env_call_in_controller_is_null' => env('INTERNAL_SECRET') === null,
+                ]);
+            }
 
-        $provided = $request->header('x-internal-secret');
-        if (! is_string($provided) || ! hash_equals($expected, $provided)) {
-            Log::warning('SyncBridge webhook: geçersiz veya eksik x-internal-secret', [
+            Log::warning('Unauthorized webhook', [
                 'path' => $request->path(),
+                'header_len' => strlen($header),
+                'config_len' => strlen($config),
             ]);
 
             return response()->json(['error' => 'Unauthorized'], 401);
