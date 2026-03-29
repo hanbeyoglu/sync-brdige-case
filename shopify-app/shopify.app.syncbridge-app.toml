@@ -1,10 +1,10 @@
 client_id = "79283ef913700ce71bdd779e6644dad2"
 name = "SyncBridge App"
-application_url = "https://president-hoping-only-powerful.trycloudflare.com"
+application_url = "https://syncbridge.hanbeyoglu.com"
 embedded = true
 
 [build]
-automatically_update_urls_on_dev = true
+automatically_update_urls_on_dev = false
 
 [webhooks]
 api_version = "2026-04"
@@ -18,7 +18,7 @@ scopes = "read_products,write_products,read_inventory,write_inventory,read_order
 
 [auth]
 redirect_urls = [
-  "https://president-hoping-only-powerful.trycloudflare.com/auth/callback",
-  "https://president-hoping-only-powerful.trycloudflare.com/auth/shopify/callback",
-  "https://president-hoping-only-powerful.trycloudflare.com/api/auth"
+  "https://syncbridge.hanbeyoglu.com/auth/callback",
+  "https://syncbridge.hanbeyoglu.com/auth/shopify/callback",
+  "https://syncbridge.hanbeyoglu.com/api/auth"
 ]
