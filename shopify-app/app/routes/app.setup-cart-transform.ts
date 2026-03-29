@@ -26,6 +26,16 @@ const CREATE_CART_TRANSFORM = `
   }
 `;
 
+const APP_INSTALLATION_SCOPES = `
+  query AppInstallationScopes {
+    currentAppInstallation {
+      accessScopes {
+        handle
+      }
+    }
+  }
+`;
+
 export async function loader({ request }) {
   try {
     const { admin } = await authenticate.admin(request);
@@ -41,6 +51,36 @@ export async function loader({ request }) {
             "B2B_CART_TRANSFORM_FUNCTION_ID eksik. Önce cart-transform function ID'sini .env içine ekleyin.",
         },
         { status: 400 },
+      );
+    }
+
+    const scopeRes = await admin.graphql(APP_INSTALLATION_SCOPES);
+    const scopeJson = await scopeRes.json();
+    const grantedScopes =
+      scopeJson?.data?.currentAppInstallation?.accessScopes?.map(
+        (s) => s?.handle,
+      ) ?? [];
+    const hasCartTransformScopes =
+      grantedScopes.includes("read_cart_transforms") &&
+      grantedScopes.includes("write_cart_transforms");
+
+    if (!hasCartTransformScopes) {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            "App installation scope'larında read_cart_transforms/write_cart_transforms yok.",
+          grantedScopes,
+          envScopes:
+            // eslint-disable-next-line no-undef
+            (process.env.SCOPES || "")
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          hint:
+            "App'i uninstall + reinstall yapın (scope değişikliği eski token'a işlemez).",
+        },
+        { status: 403 },
       );
     }
 
@@ -86,6 +126,7 @@ export async function loader({ request }) {
         ok: false,
         error: message,
         graphQLErrors,
+        rawError: String(error),
         hint:
           "Muhtemel neden: scope eksik/yenilenmedi (read_cart_transforms, write_cart_transforms) veya function ID bu app'e ait değil.",
       },
