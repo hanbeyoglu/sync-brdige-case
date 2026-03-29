@@ -3,7 +3,7 @@ import type {
   CartTransformRunResult,
 } from "../generated/api";
 
-const TAG_PRIORITY = ["wholesale", "retail", "vip"] as const;
+const TAG_PRIORITY = ["wholesale", "vip", "retail"] as const;
 
 const NO_CHANGES: CartTransformRunResult = {
   operations: [],
@@ -21,24 +21,39 @@ function normalizeTag(raw: string | null | undefined): string | null {
 function resolveChosenTierTag(
   customer: CartTransformRunInput["cart"]["buyerIdentity"]["customer"],
 ): (typeof TAG_PRIORITY)[number] | null {
-  if (!customer?.tierTags?.length) {
-    return null;
-  }
+  if (!customer) return null;
+
   const present = new Set<string>();
-  for (const row of customer.tierTags) {
-    if (!row?.hasTag) {
-      continue;
-    }
-    const n = normalizeTag(row.tag);
-    if (n) {
-      present.add(n);
+
+  if (customer.tierTags?.length) {
+    for (const row of customer.tierTags) {
+      if (!row?.hasTag) {
+        continue;
+      }
+      const n = normalizeTag(row.tag);
+      if (n) {
+        present.add(n);
+      }
     }
   }
+
   for (const t of TAG_PRIORITY) {
     if (present.has(t)) {
       return t;
     }
   }
+
+  const fromMetafield = normalizeTag(
+    (customer as { tierMetafield?: { value?: string | null } | null })
+      .tierMetafield?.value,
+  );
+  if (
+    fromMetafield &&
+    TAG_PRIORITY.some((tag) => tag === fromMetafield)
+  ) {
+    return fromMetafield as (typeof TAG_PRIORITY)[number];
+  }
+
   return null;
 }
 
@@ -97,8 +112,19 @@ export function cartTransformRun(
     if (!m || m.__typename !== "ProductVariant") {
       continue;
     }
+
     const newUnit = tierUnitPriceFromProductMetafields(m.product, chosen);
     if (newUnit == null) {
+      continue;
+    }
+
+    const currentUnit = Number(line.cost?.amountPerQuantity?.amount ?? NaN);
+    if (!Number.isFinite(currentUnit)) {
+      continue;
+    }
+
+    // No-op operasyon üretme.
+    if (Math.abs(currentUnit - newUnit) < 0.00001) {
       continue;
     }
 

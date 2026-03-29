@@ -3,13 +3,27 @@ import { authenticate } from "../shopify.server";
 export async function loader({ request }) {
   const { admin } = await authenticate.admin(request);
 
+  // eslint-disable-next-line no-undef
+  const functionId = process.env.B2B_PRICING_FUNCTION_ID || "";
+  if (!functionId) {
+    return Response.json(
+      {
+        ok: false,
+        error:
+          "B2B_PRICING_FUNCTION_ID env değişkeni eksik. Önce deploy edilen pricing function ID'sini ekleyin.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const startsAt = new Date().toISOString();
   const response = await admin.graphql(`
-    mutation {
+    mutation CreateB2bPricingDiscount($functionId: String!, $startsAt: DateTime!) {
       discountAutomaticAppCreate(
         automaticAppDiscount: {
           title: "B2B Pricing"
-          functionId: "gid://shopify/ShopifyFunction/019d3534-0f4e-72c8-822c-896c444f9371"
-          startsAt: "2026-01-01T00:00:00Z"
+          functionId: $functionId
+          startsAt: $startsAt
         }
       ) {
         automaticAppDiscount {
@@ -21,7 +35,12 @@ export async function loader({ request }) {
         }
       }
     }
-  `);
+  `, {
+    variables: {
+      functionId,
+      startsAt,
+    },
+  });
 
   return Response.json(await response.json());
 }

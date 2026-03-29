@@ -2,6 +2,9 @@ query CartTransformRunInput {
   cart {
     buyerIdentity {
       customer {
+        tierMetafield: metafield(namespace: "custom", key: "tier") {
+          value
+        }
         tierTags: hasTags(tags: ["wholesale", "retail", "vip"]) {
           tag
           hasTag

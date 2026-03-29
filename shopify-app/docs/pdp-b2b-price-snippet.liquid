@@ -1,0 +1,40 @@
+{%- comment -%}
+B2B PDP fiyat görünümü (müşteri tag + ürün metafield)
+Namespace/keys: custom.wholesale, custom.vip, custom.retail
+{%- endcomment -%}
+
+{%- assign selected_tier = blank -%}
+
+{%- if customer -%}
+  {%- if customer.tags contains 'wholesale' -%}
+    {%- assign selected_tier = 'wholesale' -%}
+  {%- elsif customer.tags contains 'vip' -%}
+    {%- assign selected_tier = 'vip' -%}
+  {%- elsif customer.tags contains 'retail' -%}
+    {%- assign selected_tier = 'retail' -%}
+  {%- endif -%}
+
+  {%- if selected_tier == blank and customer.metafields.custom.tier != blank -%}
+    {%- assign selected_tier = customer.metafields.custom.tier.value | downcase -%}
+  {%- endif -%}
+{%- endif -%}
+
+{%- assign b2b_price = blank -%}
+{%- if selected_tier == 'wholesale' and product.metafields.custom.wholesale != blank -%}
+  {%- assign b2b_price = product.metafields.custom.wholesale.value -%}
+{%- elsif selected_tier == 'vip' and product.metafields.custom.vip != blank -%}
+  {%- assign b2b_price = product.metafields.custom.vip.value -%}
+{%- elsif selected_tier == 'retail' and product.metafields.custom.retail != blank -%}
+  {%- assign b2b_price = product.metafields.custom.retail.value -%}
+{%- endif -%}
+
+{%- if b2b_price != blank -%}
+  <div class="price price--b2b" data-b2b-tier="{{ selected_tier }}">
+    <span class="price-item price-item--regular">{{ b2b_price | times: 100 | money }}</span>
+    <small style="display:block;opacity:.65;">B2B ({{ selected_tier }})</small>
+  </div>
+{%- else -%}
+  <div class="price price--default">
+    <span class="price-item price-item--regular">{{ product.selected_or_first_available_variant.price | money }}</span>
+  </div>
+{%- endif -%}
