@@ -18,36 +18,46 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
-        <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
-        </p>
+        <div className={styles.hero}>
+          <p className={styles.kicker}>SyncBridge</p>
+          <h1 className={styles.heading}>
+            Shopify ve Laravel arasinda B2B senkronu tek panelden yonetin
+          </h1>
+          <p className={styles.text}>
+            Urun, stok ve musteri segmentine ozel fiyatlarinizi guvenli sekilde
+            senkronize edin. Manual, incremental ve webhook akislari tek yapida
+            birlesir.
+          </p>
+          <ul className={styles.list}>
+            <li>SKU bazli urun esleme ve hizli fiyat/stok guncelleme</li>
+            <li>Tag bazli B2B fiyatlandirma ve cart function entegrasyonu</li>
+            <li>Detayli loglar, webhook dogrulama ve guvenli API koprusu</li>
+          </ul>
+        </div>
+
         {showForm && (
-          <Form className={styles.form} method="post" action="/auth/login">
-            <label className={styles.label}>
-              <span>Shop domain</span>
-              <input className={styles.input} type="text" name="shop" />
-              <span>e.g: my-shop-domain.myshopify.com</span>
-            </label>
-            <button className={styles.button} type="submit">
-              Log in
-            </button>
-          </Form>
+          <div className={styles.loginCard}>
+            <h2 className={styles.cardTitle}>Magaza baglantisi</h2>
+            <p className={styles.cardText}>
+              Shopify magaza domaininizi girin ve uygulamaya guvenli giris
+              yapin.
+            </p>
+            <Form className={styles.form} method="post" action="/auth/login">
+              <label className={styles.label}>
+                <span>Shop domain</span>
+                <input
+                  className={styles.input}
+                  type="text"
+                  name="shop"
+                  placeholder="ornek-magaza.myshopify.com"
+                />
+              </label>
+              <button className={styles.button} type="submit">
+                Uygulamaya Gir
+              </button>
+            </Form>
+          </div>
         )}
-        <ul className={styles.list}>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-          <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
-          </li>
-        </ul>
       </div>
     </div>
   );

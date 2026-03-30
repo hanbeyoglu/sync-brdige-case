@@ -1,292 +1,218 @@
-# SyncBridge – Shopify ↔ Laravel B2B Senkronizasyon Platformu
+# SyncBridge Case Project
 
-## 🚀 Genel Bakış
+Shopify (Remix/React) + Laravel tabanlı B2B senkronizasyon platformu.
 
-SyncBridge, Laravel backend ile Shopify arasında ürün, stok ve B2B fiyat verilerini senkronize eden full-stack bir entegrasyon platformudur.
+Bu proje, case kapsamında istenen Laravel paneli, Shopify embedded app, App Extension (Functions), SKU bazlı sync, webhook senkronizasyonu ve canlı deploy gereksinimlerini karşılamak için geliştirilmiştir.
 
-Sistem **ölçeklenebilir, güvenli ve production-ready mimari** ile geliştirilmiştir.
+## Live Environments
 
-Desteklenen özellikler:
+- Shopify development store: `syncbridge-b2b-case-dev`
+- Laravel panel URL: `https://syncbridge-api.hanbeyoglu.com/`
+- Shopify app URL: `https://syncbridge.hanbeyoglu.com`
 
-- Tam ve incremental ürün senkronizasyonu
-- Çok katmanlı B2B fiyat sistemi (wholesale, retail, VIP)
-- Webhook tabanlı gerçek zamanlı güncellemeler
-- Shopify Functions (Discount & Cart Transform)
-- Idempotent ve eşzamanlılığa dayanıklı stok yönetimi
+## Tech Stack
 
----
+- Backend: Laravel
+- Shopify App UI: Remix/React
+- Shopify: Admin GraphQL, Webhooks, Shopify Functions
+- Infra: Docker, canlı HTTPS deploy
+- Source Control: GitHub
 
-## 🧱 Mimari
-
-```text
-Shopify
-   ↓ (Webhook - HMAC doğrulama)
-Node.js Shopify App (Gateway)
-   ↓ (Internal Secret ile güvenli istek)
-Laravel Backend (İş Mantığı)
-```
-
----
-
-## 🔐 Güvenlik Modeli
-
-- Shopify webhook’ları Node.js katmanında **HMAC ile doğrulanır**
-- Laravel sadece güvenilir iç istekleri kabul eder:
-  - `x-internal-secret`
-
-- Bu sayede:
-  - Sahte istekler engellenir
-  - Tekrarlı doğrulama önlenir
-  - Sistem katmanlı güvenliğe sahip olur
-
----
-
-## 🛍️ Özellikler
-
-### ✅ Laravel Yönetim Paneli
-
-- Admin login sistemi
-- Ürün CRUD işlemleri
-- Seed ile oluşturulmuş 25 ürün:
-  - 15’i Shopify ile senkron
-  - 10’u yalnızca harici
-
----
-
-### 📦 Stok Yönetimi
-
-- Stoklar `product_inventories.quantity` alanında tutulur
-- Çift yönlü senkronizasyon:
-  - Laravel → Shopify
-  - Shopify → Laravel (webhook ile)
-
----
-
-### 💰 B2B Fiyatlandırma
-
-- Katmanlı fiyat sistemi:
-  - wholesale
-  - retail
-  - VIP
-
-- `ProductPriceTier` tablosunda saklanır
-- Shopify’a **metafield (JSON)** olarak gönderilir
-
----
-
-### 🔁 Senkronizasyon Sistemi
-
-#### 🔹 Full Sync
-
-Tüm ürünler Shopify’a gönderilir
-
-#### 🔹 Incremental Sync
-
-Sadece değişen ürünler senkronize edilir:
-
-- hash kontrolü
-- `needsIncrementalSync` flag
-
----
-
-### ⚡ Toplu Güncelleme (Bulk)
-
-Bu projede Shopify’ın async Bulk Operation API’si yerine:
-
-- `productVariantsBulkUpdate`
-- `inventorySetQuantities`
-- `metafieldsSet`
-
-kullanılmıştır.
-
-#### Neden?
-
-- Daha hızlı geri bildirim
-- Daha kolay hata yönetimi
-- Orta ölçekli veri için daha kontrol edilebilir yapı
-
----
-
-### 🔌 Shopify App (React Router)
-
-Özellikler:
-
-- Manuel senkron ekranı
-- Senkron logları görüntüleme
-- Laravel API ile güvenli iletişim
-
-Route’lar:
-
-- `/app/sync`
-- `/app/logs`
-
----
-
-### 🔔 Webhook Sistemi
-
-#### Akış:
+## Architecture
 
 ```text
-Shopify → Node → Laravel
+Shopify Admin / Storefront
+  -> Shopify App (Remix)
+  -> Laravel API
+  -> Database
+
+Shopify Webhooks
+  -> Shopify App webhook endpoints (HMAC)
+  -> Laravel webhook endpoints (internal secret)
 ```
 
-#### Desteklenen Webhook’lar:
+## Case Requirement Coverage
 
-- `orders/create`
-- `products/update`
-- `inventory/update`
-- `inventory-levels/update`
+| Requirement | Status | Notes |
+|---|---|---|
+| Laravel panel (ürün/stok/fiyat yönetimi) | Done | CRUD + seed data |
+| Shopify app (manual sync + logs) | Done | `/app/sync`, `/app/logs` |
+| SKU bazlı mapping | Done | Laravel -> Shopify mapping flow |
+| Bulk mutation tabanlı sync | Done | `productVariantsBulkUpdate`, `inventorySetQuantities`, `metafieldsSet` |
+| B2B tag bazlı fiyat | Done | `wholesale`, `vip`, `retail` |
+| Sepette özel fiyat uygulama | Done* | `cart-transform` aktif store/plan gerektirir |
+| Webhook sync | Done | Orders/Product/Inventory webhook akışı |
+| HMAC + güvenlik | Done | HMAC + internal secret |
+| Canlı deploy | Done | App + Backend canlı URL |
 
----
+## Core Features
 
-### 🧠 Idempotency & Eşzamanlılık Yönetimi
+- Full Sync (Laravel -> Shopify)
+- Incremental Sync (değişen ürünler)
+- SKU bazlı ürün/variant mapping
+- Stok güncelleme ve çift yönlü stok akışı
+- B2B tier fiyatlarının Shopify metafield olarak taşınması
+- Senkron loglarının app içinde izlenmesi
 
-Çift stok düşmesini engellemek için:
+## B2B Pricing Model
 
-- `shopify_webhook_logs` tablosu (unique order_id)
-- `insertOrIgnore()` ile atomic claim
-- `DB::transaction()` ile güvenli işlem
-- `lockForUpdate()` ile race condition önleme
+Müşteri segmentleri:
 
----
+- `wholesale`
+- `vip`
+- `retail`
 
-### 🧾 Sipariş İşleme
+Shopify product metafield key'leri:
 
-Sipariş geldiğinde:
+- `custom.wholesale`
+- `custom.vip`
+- `custom.retail`
 
-- line_items parse edilir
-- Shopify `variant_id` → Laravel ürün eşleşmesi yapılır
-- stok güvenli şekilde düşürülür
+Tier çözümleme önceliği:
 
----
+- `wholesale > vip > retail`
+- Tag yoksa `customer.metafields.custom.tier` fallback
 
-### 🧩 Shopify Functions (Extension)
+## Shopify Functions
 
-Projede bulunan extension’lar:
+- `extensions/b2b-cart-transform`
+- `extensions/b2b-pricing`
 
-- `b2b-pricing` → indirim hesaplama
-- `b2b-cart-transform` → sepet manipülasyonu
+Davranış:
 
----
+- `b2b-cart-transform`: cart line fiyatını tier unit price'a sabitler
+- `b2b-pricing`: discount tabanlı alternatif fiyatlama
 
-## ⚠️ Ürün Sayfası Fiyat Gösterimi (PDP)
+## Platform Limitation (Important)
 
-B2B fiyatlar:
+`cart_transform` aktivasyonu store planına bağlıdır.
 
-- metafield olarak Shopify’a gönderilir
-- Shopify Functions ile uygulanır
+- Basic store'da `cartTransformCreate` kısıtına takılabilir.
+- Bu case `syncbridge-b2b-case-dev` development store üzerinde yürütülmüştür.
 
-⚠️ Ürün sayfasında (PDP) gösterim için:
+## Security
 
-- Shopify tema (Liquid) düzenlemesi gerekir
+- Shopify webhook doğrulama: HMAC
+- App -> Laravel güvenli istek: `x-internal-secret`
+- Idempotency ve duplicate koruması
+- Transaction/locking ile race-condition azaltımı
 
----
+## Sync Modes
 
-## 🔐 Ortam Değişkenleri
+- Manual Sync: `/app/sync`
+- Incremental Sync: `/app/sync` (mode)
+- Webhook Sync: order/product/inventory events
 
-### Node (Shopify App)
+## Bugfix Included
 
-```env
-INTERNAL_SECRET=super_secure_key
-SHOPIFY_API_KEY=...
-SHOPIFY_API_SECRET=...
-```
+Düzeltilen vaka:
 
----
+- Laravel'de ürün pasif yapıldığında Shopify'da arşivleniyor,
+- tekrar aktif edildiğinde Shopify tarafında yeniden aktif olmuyordu.
 
-### Laravel
+Uygulanan düzeltme:
 
-```env
-INTERNAL_SECRET=super_secure_key
-DB_CONNECTION=...
-```
+- SKU mapping tüm product status'larıyla alınır,
+- `in_shopify=true` ve ürün status `ACTIVE` değilse ürün otomatik re-activate edilir.
 
----
+İlgili dosya:
 
-## 🧪 Kurulum
+- `shopify-app/app/services/bulkSync.server.js`
 
-### 1. Repo klonla
+## Setup
+
+1. Repo clone
 
 ```bash
-git clone https://github.com/your-repo/syncbridge.git
-cd syncbridge
+git clone <repo-url>
+cd SyncBridge
 ```
 
----
-
-### 2. Docker başlat
+2. Servisleri başlat
 
 ```bash
 docker compose up -d --build
 ```
 
----
-
-### 3. Laravel kurulum
+3. Laravel migrate/seed
 
 ```bash
-php artisan migrate
-php artisan db:seed
+cd backend
+php artisan migrate --seed
 ```
 
----
-
-### 4. Shopify App başlat
+4. Shopify app build/start
 
 ```bash
+cd ../shopify-app
+npm install
 npm run build
 npm run start
 ```
 
----
+5. Shopify app deploy
 
-## 🌐 Deployment
+```bash
+shopify app deploy
+```
 
-Sistem production ortamında çalışacak şekilde tasarlanmıştır:
+## Environment Variables
 
-- HTTPS aktif
-- Shopify app kurulmuş
-- Webhook endpoint’leri public
-- .env doğru yapılandırılmış
+`shopify-app/.env`:
 
----
+- `SHOPIFY_API_KEY`
+- `SHOPIFY_API_SECRET`
+- `SHOPIFY_APP_URL=https://syncbridge.hanbeyoglu.com`
+- `SCOPES=read_products,write_products,read_inventory,write_inventory,read_orders,write_orders,read_customers,write_customers,read_cart_transforms,write_cart_transforms,write_discounts`
+- `LARAVEL_API_URL=https://syncbridge-api.hanbeyoglu.com`
+- `API_SECRET_KEY=...`
+- `INTERNAL_SECRET=...`
+- `B2B_CART_TRANSFORM_FUNCTION_ID=...`
+- `B2B_PRICING_FUNCTION_ID=...`
 
-## 📊 Loglama
+`backend/.env`:
 
-Sistem şu olayları loglar:
+- `INTERNAL_SECRET` (Shopify app ile aynı olmalı)
+- DB/APP konfigürasyonları
 
-- webhook alındı
-- duplicate tespit edildi
-- stok güncellendi
-- senkron işlemleri
+## Function Activation
 
----
+- Cart transform setup: `/app/setup-cart-transform`
+- Discount setup: `/app/setup-discount`
 
-## 🧠 Mimari Kararlar
+Beklenen:
 
-- HMAC doğrulama sistem girişinde (Node)
-- Laravel’da internal güvenlik katmanı
-- DB seviyesinde idempotency
-- Senkron GraphQL kullanımı
+- `ok: true` veya `alreadyExists: true`
 
----
+## QA / Demo Checklist
 
-## 📌 Özet
+1. Laravel panelde ürünü pasif yap, sync çalıştır -> Shopify'da arşivlensin.
+2. Aynı ürünü aktif yap, sync çalıştır -> Shopify'da yeniden ACTIVE olsun.
+3. Üründe `custom.wholesale/vip/retail` değerlerini doğrula.
+4. Tag'li müşteriyle giriş yapıp cart'a ürün ekle.
+5. Cart line fiyatının tier fiyatına göre güncellendiğini doğrula.
+6. Sipariş oluştur, webhook akışında 200 loglarını doğrula.
 
-Bu proje case’in temel gereksinimlerini büyük ölçüde karşılar:
+## Credentials Policy (Important)
 
-- Laravel panel ✔️
-- Ürün + stok senkron ✔️
-- B2B fiyat sistemi ✔️
-- Shopify entegrasyonu ✔️
-- Webhook sistemi ✔️
-- Güvenli mimari ✔️
-- Idempotent işlem ✔️
+Güvenlik nedeniyle gerçek kişisel şifreler/OTP hesapları repo içinde paylaşılmaz.
 
----
+Case değerlendirmesi için:
 
-## 👨‍💻 Geliştirici
+- Demo kullanıcı bilgileri private kanal üzerinden paylaşılır.
+- Gerekirse geçici test kullanıcıları oluşturulur.
+- Teslim sonrası geçici erişimler iptal edilir.
 
-Bu proje teknik case çalışması kapsamında geliştirilmiştir.
+## Known Limitations
 
----
+- PDP (ürün detay sayfası) fiyat görünümü için tema Liquid entegrasyonu gerekir.
+- Function deploy edilmesi tek başına PDP render'ını değiştirmez.
+- Store planına göre `cart_transform` aktivasyonu değişebilir.
+
+## Deliverables
+
+- Laravel backend (canlı)
+- Shopify embedded app (canlı)
+- Shopify Functions (discount + cart transform)
+- GitHub kaynak kodu
+- Bu README
