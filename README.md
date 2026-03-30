@@ -10,6 +10,13 @@ Bu proje, case kapsamında istenen Laravel paneli, Shopify embedded app, App Ext
 - Laravel panel URL: `https://syncbridge-api.hanbeyoglu.com/`
 - Shopify app URL: `https://syncbridge.hanbeyoglu.com`
 
+Laravel Panel Giriş Bilgileri
+
+```text
+  Email: admin@syncbridge.local
+  Password: password
+```
+
 ## Tech Stack
 
 - Backend: Laravel
@@ -33,17 +40,17 @@ Shopify Webhooks
 
 ## Case Requirement Coverage
 
-| Requirement | Status | Notes |
-|---|---|---|
-| Laravel panel (ürün/stok/fiyat yönetimi) | Done | CRUD + seed data |
-| Shopify app (manual sync + logs) | Done | `/app/sync`, `/app/logs` |
-| SKU bazlı mapping | Done | Laravel -> Shopify mapping flow |
-| Bulk mutation tabanlı sync | Done | `productVariantsBulkUpdate`, `inventorySetQuantities`, `metafieldsSet` |
-| B2B tag bazlı fiyat | Done | `wholesale`, `vip`, `retail` |
-| Sepette özel fiyat uygulama | Done* | `cart-transform` aktif store/plan gerektirir |
-| Webhook sync | Done | Orders/Product/Inventory webhook akışı |
-| HMAC + güvenlik | Done | HMAC + internal secret |
-| Canlı deploy | Done | App + Backend canlı URL |
+| Requirement                              | Status | Notes                                                                  |
+| ---------------------------------------- | ------ | ---------------------------------------------------------------------- |
+| Laravel panel (ürün/stok/fiyat yönetimi) | Done   | CRUD + seed data                                                       |
+| Shopify app (manual sync + logs)         | Done   | `/app/sync`, `/app/logs`                                               |
+| SKU bazlı mapping                        | Done   | Laravel -> Shopify mapping flow                                        |
+| Bulk mutation tabanlı sync               | Done   | `productVariantsBulkUpdate`, `inventorySetQuantities`, `metafieldsSet` |
+| B2B tag bazlı fiyat                      | Done   | `wholesale`, `vip`, `retail`                                           |
+| Sepette özel fiyat uygulama              | Done\* | `cart-transform` aktif store/plan gerektirir                           |
+| Webhook sync                             | Done   | Orders/Product/Inventory webhook akışı                                 |
+| HMAC + güvenlik                          | Done   | HMAC + internal secret                                                 |
+| Canlı deploy                             | Done   | App + Backend canlı URL                                                |
 
 ## Core Features
 
@@ -102,22 +109,6 @@ Davranış:
 - Manual Sync: `/app/sync`
 - Incremental Sync: `/app/sync` (mode)
 - Webhook Sync: order/product/inventory events
-
-## Bugfix Included
-
-Düzeltilen vaka:
-
-- Laravel'de ürün pasif yapıldığında Shopify'da arşivleniyor,
-- tekrar aktif edildiğinde Shopify tarafında yeniden aktif olmuyordu.
-
-Uygulanan düzeltme:
-
-- SKU mapping tüm product status'larıyla alınır,
-- `in_shopify=true` ve ürün status `ACTIVE` değilse ürün otomatik re-activate edilir.
-
-İlgili dosya:
-
-- `shopify-app/app/services/bulkSync.server.js`
 
 ## Setup
 
@@ -192,16 +183,6 @@ Beklenen:
 4. Tag'li müşteriyle giriş yapıp cart'a ürün ekle.
 5. Cart line fiyatının tier fiyatına göre güncellendiğini doğrula.
 6. Sipariş oluştur, webhook akışında 200 loglarını doğrula.
-
-## Credentials Policy (Important)
-
-Güvenlik nedeniyle gerçek kişisel şifreler/OTP hesapları repo içinde paylaşılmaz.
-
-Case değerlendirmesi için:
-
-- Demo kullanıcı bilgileri private kanal üzerinden paylaşılır.
-- Gerekirse geçici test kullanıcıları oluşturulur.
-- Teslim sonrası geçici erişimler iptal edilir.
 
 ## Known Limitations
 
