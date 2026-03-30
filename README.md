@@ -6,7 +6,7 @@ Bu proje, case kapsamında istenen Laravel paneli, Shopify embedded app, App Ext
 
 ## Live Environments
 
-- Shopify development store: `syncbridge-b2b-case-dev`
+- Shopify development store: `syncbridge-b2b-case-dev.myshopify.com`
 - Laravel panel URL: `https://syncbridge-api.hanbeyoglu.com/`
 - Shopify app URL: `https://syncbridge.hanbeyoglu.com`
 
